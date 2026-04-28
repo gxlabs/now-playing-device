@@ -341,22 +341,29 @@ void ui_update_from_state(const np_state_t *state, const uint8_t *art_pixels,
        local interpolation run smoothly to avoid flicker. */
     s_duration = state->duration;
 
-    if (optimistic_hold) {
-        /* Trust our local rate/anchor; skip server reconciliation. */
-    } else if (!s_has_data || state->playback_rate != s_rate) {
-        /* Rate changed or first update — hard reset */
+    if (!s_has_data) {
+        /* First update — hard reset */
         s_elapsed = state->elapsed;
         s_anchor_ms = state->fetch_time_ms;
         s_rate = state->playback_rate;
+    } else if (state->playback_rate != s_rate) {
+        /* Rate disagrees. While optimistic_hold is active, wait for the
+           server to catch up to our toggle; otherwise treat as a genuine
+           change and hard reset. */
+        if (!optimistic_hold) {
+            s_elapsed = state->elapsed;
+            s_anchor_ms = state->fetch_time_ms;
+            s_rate = state->playback_rate;
+        }
     } else {
-        /* Compare server elapsed vs our interpolated elapsed */
-        uint32_t now = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
-        float dt = (float)(now - s_anchor_ms) / 1000.0f;
+        /* Rates match — keep elapsed in sync with the server even during
+           the optimistic hold so the displayed time stays accurate. */
+        float dt = (float)(now_ms - s_anchor_ms) / 1000.0f;
         float local_e = s_elapsed + dt * s_rate;
         float drift = state->elapsed - local_e;
 
         if (drift > 2.0f || drift < -2.0f) {
-            /* Seek or track change — hard reset */
+            /* Seek or large drift — hard reset */
             s_elapsed = state->elapsed;
             s_anchor_ms = state->fetch_time_ms;
         }
