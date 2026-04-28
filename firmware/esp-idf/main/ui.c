@@ -154,12 +154,12 @@ static void create_setup_screen(lv_obj_t *scr)
     lv_qrcode_update(qr_widget, SETUP_URL, strlen(SETUP_URL));
     lv_obj_center(qr_widget);
 
-    /* Instruction */
-    lv_obj_t *hint = lv_label_create(setup_screen);
-    lv_label_set_text(hint, "Scan to set up");
-    lv_obj_set_style_text_color(hint, lv_color_make(150, 150, 150), 0);
-    lv_obj_set_style_text_font(hint, &lv_font_montserrat_12, 0);
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -35);
+    /* URL caption directly under the QR */
+    lv_obj_t *url = lv_label_create(setup_screen);
+    lv_label_set_text(url, "static.gxlabs.co/now-playing");
+    lv_obj_set_style_text_color(url, lv_color_make(180, 180, 180), 0);
+    lv_obj_set_style_text_font(url, &lv_font_montserrat_12, 0);
+    lv_obj_align(url, LV_ALIGN_BOTTOM_MID, 0, -55);
 }
 
 /* ── Now-playing screen ───────────────────────────────────────── */
