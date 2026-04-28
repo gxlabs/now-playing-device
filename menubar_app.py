@@ -169,9 +169,13 @@ class NowPlayingBridge(rumps.App):
         return path
 
     def _hide_icon(self, _):
+        # Remove the NSStatusItem entirely so the menu bar slot disappears.
+        # The serial bridge keeps running in the background; user must relaunch
+        # the app to bring the icon back.
         self._icon_hidden = True
-        self.title = ""
-        self.icon = self._hidden_icon
+        AppKit.NSStatusBar.systemStatusBar().removeStatusItem_(
+            self._nsapp.nsstatusitem
+        )
 
     @rumps.timer(1)
     def tick(self, _):
@@ -181,16 +185,16 @@ class NowPlayingBridge(rumps.App):
             self._connect()
             connected = self.port is not None
 
-        # Update icon on state change (skip if user has hidden the icon)
-        if not self._icon_hidden and connected != self._was_connected:
-            self.icon = get_icon(connected)
-            self._was_connected = connected
-
-        # Port-info menu line reflects current state
-        self._port_item.title = self.port_path if connected else "No device"
+        # Update menu bar UI on state change (skipped while hidden)
+        if not self._icon_hidden:
+            if connected != self._was_connected:
+                self.icon = get_icon(connected)
+                self._was_connected = connected
+            self._port_item.title = self.port_path if connected else "No device"
 
         if not connected:
-            self._track_item.title = "Disconnected"
+            if not self._icon_hidden:
+                self._track_item.title = "Disconnected"
             return
 
         try:
@@ -198,12 +202,13 @@ class NowPlayingBridge(rumps.App):
         except Exception:
             return
 
-        if info.get("playing"):
-            title = info.get("title", "")
-            artist = info.get("artist", "")
-            self._track_item.title = f"{title} — {artist}" if artist else title
-        else:
-            self._track_item.title = "Nothing playing"
+        if not self._icon_hidden:
+            if info.get("playing"):
+                title = info.get("title", "")
+                artist = info.get("artist", "")
+                self._track_item.title = f"{title} — {artist}" if artist else title
+            else:
+                self._track_item.title = "Nothing playing"
 
         # Send to device
         try:

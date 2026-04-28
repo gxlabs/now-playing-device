@@ -13,6 +13,11 @@ firmware/esp-idf/sdkconfig
 firmware/esp-idf/sdkconfig.old
 firmware/esp-idf/managed_components/
 firmware/esp-idf/dependencies.lock
+firmware/esp-idf/.cache/
+
+# Editor / tooling
+.cache/
+compile_commands.json
 
 # macOS
 .DS_Store

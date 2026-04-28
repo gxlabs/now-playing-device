@@ -223,14 +223,14 @@ static void create_playing_screen(lv_obj_t *scr)
 
     /* Control buttons — large, well-spaced */
     btn_prev = make_btn(overlay, LV_SYMBOL_PREV, 38, on_prev);
-    lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_MID, -64, -14);
+    lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_MID, -63, -14);
 
     btn_toggle = make_btn(overlay, LV_SYMBOL_PLAY, 60, on_toggle);
     lv_obj_align(btn_toggle, LV_ALIGN_BOTTOM_MID, 0, -8);
     toggle_label = lv_obj_get_child(btn_toggle, 0);
 
     btn_next = make_btn(overlay, LV_SYMBOL_NEXT, 38, on_next);
-    lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 64, -14);
+    lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 63, -14);
 
     /* Idle label (nothing playing but connected) */
     idle_label = lv_label_create(scr);
