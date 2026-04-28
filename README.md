@@ -26,6 +26,8 @@ The Mac reads now-playing metadata via `nowplaying-cli`, converts artwork to RGB
 
 ### Mac
 
+> **Required dependency:** the bridge shells out to [`nowplaying-cli`](https://github.com/kirtan-shah/nowplaying-cli) to read media metadata from macOS. macOS gates `MediaRemote.framework` access by binary path/identity, so a copy at any other location returns empty data — meaning `nowplaying-cli` **must be installed via Homebrew at its default location** and can't be bundled into the .app.
+
 ```bash
 brew bundle                # installs nowplaying-cli + python
 python -m venv .venv

@@ -66,6 +66,17 @@
     font-size: 0.9rem;
   }
   pre code { background: none; border: none; padding: 0; }
+  .callout {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 0 0 16px;
+    font-size: 0.95rem;
+  }
+  .callout strong { color: var(--accent); }
+  .callout code { background: rgba(255,255,255,0.05); }
   .hero {
     width: 100%;
     margin: 16px 0 40px;
@@ -140,6 +151,8 @@
   <span class="pill">USB-C</span>
 
   <h2>Download</h2>
+  <p class="callout"><strong>Before you launch:</strong> install the <code>nowplaying-cli</code> Homebrew package — the app shells out to it to read media metadata from macOS. macOS only authorizes that binary at its installed Homebrew path, so it can't be bundled inside the .app.</p>
+  <pre><code>brew install nowplaying-cli</code></pre>
   <a class="download" href="./NowPlayingBridge.zip">Download Now Playing Bridge.zip</a>
   <p class="download-meta">~22 MB · ad-hoc signed (Gatekeeper will warn on first launch — right-click the .app and choose Open)</p>
 
@@ -159,9 +172,7 @@
   <p>Firmware is built from the <code>firmware/</code> tree using ESP-IDF (<code>idf.py build flash</code>).</p>
 
   <h2>Setup</h2>
-  <p>The app shells out to <code>nowplaying-cli</code> to read media metadata from macOS. Install it via Homebrew:</p>
-  <pre><code>brew install nowplaying-cli</code></pre>
-  <p>Then drag <strong>Now Playing Bridge.app</strong> to <code>/Applications</code> and launch it. The app auto-detects the ESP32 over USB on every tick — plug the device in any time and it'll just connect.</p>
+  <p>Drag <strong>Now Playing Bridge.app</strong> to <code>/Applications</code> and launch it. The app auto-detects the ESP32 over USB on every tick — plug the device in any time and it'll just connect.</p>
 
   <h2>Menu bar</h2>
   <ul>
