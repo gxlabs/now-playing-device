@@ -40,8 +40,11 @@ static lv_image_dsc_t art_dsc;
 static float s_elapsed, s_rate, s_duration;
 static float s_last_play_rate = 1.0f;   /* remembers rate so resume matches it */
 static uint32_t s_anchor_ms;
+static uint32_t s_optimistic_until_ms;  /* ignore server-reported play state until this tick */
 static bool s_has_data;
 static bool s_connected;   /* true after first state update */
+
+#define OPTIMISTIC_HOLD_MS 1500
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 
@@ -100,6 +103,7 @@ static void on_toggle(lv_event_t *ev)
         s_rate = was_playing ? 0.0f : s_last_play_rate;
         lv_label_set_text(toggle_label,
             was_playing ? LV_SYMBOL_PLAY : LV_SYMBOL_PAUSE);
+        s_optimistic_until_ms = now + OPTIMISTIC_HOLD_MS;
     }
     serial_send_command("toggle");
 }
@@ -307,11 +311,19 @@ void ui_update_from_state(const np_state_t *state, const uint8_t *art_pixels,
     lv_obj_remove_flag(fade, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(overlay, LV_OBJ_FLAG_HIDDEN);
 
+    uint32_t now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    /* Honor the optimistic toggle for a moment so the UI doesn't flicker back
+       to the server's stale "still playing" snapshot before nowplaying-cli
+       has caught up. */
+    bool optimistic_hold = (int32_t)(s_optimistic_until_ms - now_ms) > 0;
+
     lv_label_set_text(title_label, state->title);
     lv_label_set_text(artist_label, state->artist);
-    lv_label_set_text(toggle_label,
-        state->playback_rate > 0 ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
-    if (state->playback_rate > 0) s_last_play_rate = state->playback_rate;
+    if (!optimistic_hold) {
+        lv_label_set_text(toggle_label,
+            state->playback_rate > 0 ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+        if (state->playback_rate > 0) s_last_play_rate = state->playback_rate;
+    }
 
     if (art_pixels) {
         art_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
@@ -327,7 +339,9 @@ void ui_update_from_state(const np_state_t *state, const uint8_t *art_pixels,
        local interpolation run smoothly to avoid flicker. */
     s_duration = state->duration;
 
-    if (!s_has_data || state->playback_rate != s_rate) {
+    if (optimistic_hold) {
+        /* Trust our local rate/anchor; skip server reconciliation. */
+    } else if (!s_has_data || state->playback_rate != s_rate) {
         /* Rate changed or first update — hard reset */
         s_elapsed = state->elapsed;
         s_anchor_ms = state->fetch_time_ms;
