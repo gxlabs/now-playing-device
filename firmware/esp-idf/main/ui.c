@@ -231,14 +231,16 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_set_style_text_font(elapsed_label, &lv_font_montserrat_12, 0);
 
     progress_bar = lv_bar_create(overlay);
-    lv_obj_set_size(progress_bar, 100, 3);
-    lv_obj_align(progress_bar, LV_ALIGN_TOP_MID, 0, 58);
+    lv_obj_set_size(progress_bar, 130, 5);
+    lv_obj_align(progress_bar, LV_ALIGN_TOP_MID, 0, 57);
     lv_bar_set_range(progress_bar, 0, 1000);
     lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(progress_bar, lv_color_make(60, 60, 60), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(progress_bar, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(progress_bar, 80, LV_PART_MAIN);
     lv_obj_set_style_bg_color(progress_bar, lv_color_white(), LV_PART_INDICATOR);
-    lv_obj_set_style_radius(progress_bar, 2, LV_PART_MAIN);
-    lv_obj_set_style_radius(progress_bar, 2, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(progress_bar, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(progress_bar, 3, LV_PART_MAIN);
+    lv_obj_set_style_radius(progress_bar, 3, LV_PART_INDICATOR);
 
     remaining_label = lv_label_create(overlay);
     lv_obj_align(remaining_label, LV_ALIGN_TOP_RIGHT, -28, 52);
