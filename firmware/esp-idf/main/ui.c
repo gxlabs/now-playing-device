@@ -11,7 +11,7 @@
 static const char *TAG = "ui";
 
 #define S 240   /* screen size */
-#define SETUP_URL "https://github.com/glenravens/now-playing"
+#define SETUP_URL "https://static.gxlabs.co/now-playing"
 
 /* ── Widgets ──────────────────────────────────────────────────── */
 
