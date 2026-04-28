@@ -145,7 +145,7 @@ class NowPlayingBridge(rumps.App):
         self._was_connected = False
         self._port_item = rumps.MenuItem("No device")
         self._track_item = rumps.MenuItem("Nothing playing")
-        self._hide_item = rumps.MenuItem("Hide icon", callback=self._hide_icon)
+        self._hide_item = rumps.MenuItem("Hide", callback=self._hide_icon)
         self.menu = [
             self._port_item,
             None,
