@@ -1,0 +1,717 @@
+# Seeed XIAO ESP32-C6 + Round Display (GC9A01A, CHSC6X touch).
+#
+# Adds a "now-playing" screen (current_screen == 2) that talks to the Python
+# server running on any Mac on the LAN. Polls each host, uses whichever is
+# actively playing; falls back to any with content. Anthem controller
+# unchanged.
+#
+# Navigation: long-press the center button on the volume screen (screen 0)
+# to enter now-playing. Long-press anywhere on screen 2 to return to 0.
+# Short-tap center on screen 0 still opens the source selector (screen 1).
+
+substitutions:
+  np_host_1: glen-work.local
+  np_host_2: glen-personal.local
+  np_port: "8787"
+  np_art_size: "180"   # pixels; art buffer = size*size*2 bytes in SRAM
+
+esphome:
+  name: circle
+  friendly_name: circle
+
+esp32:
+  board: esp32-c6-devkitc-1
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: "cRo1+ZXH0qM6DtTe7SJ/Il7e5reMSqJ0Ao270Rsk40A="
+
+ota:
+  - platform: esphome
+    password: "804b364dd22879c30292ff2051ab577d"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Circle Fallback Hotspot"
+    password: "s8DQDY3rh5uZ"
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: esptime
+
+http_request:
+  id: http_client
+  timeout: 2s
+  verify_ssl: false
+
+globals:
+  # Anthem volume screen (unchanged)
+  - id: target_volume
+    type: float
+    initial_value: '0.0'
+  - id: drag_active
+    type: bool
+    initial_value: 'false'
+  - id: current_screen
+    type: int
+    initial_value: '0'
+  - id: selected_source
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: last_touch_time
+    type: unsigned long
+    initial_value: '0'
+  - id: display_dimmed
+    type: bool
+    initial_value: 'false'
+
+  # Now-playing state (fed by /now polling)
+  - id: np_playing
+    type: bool
+    initial_value: 'false'
+  - id: np_title
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: np_artist
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: np_track_id
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: np_artwork_id
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: np_elapsed
+    type: float
+    initial_value: '0.0'
+  - id: np_duration
+    type: float
+    initial_value: '0.0'
+  - id: np_rate
+    type: float
+    initial_value: '0.0'
+  - id: np_anchor_ms
+    type: unsigned long
+    initial_value: '0'
+  - id: np_active_host
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: np_artwork_loaded
+    type: bool
+    initial_value: 'false'
+
+  # Long-press detection (for screen 0 → screen 2 navigation)
+  - id: press_start_ms
+    type: unsigned long
+    initial_value: '0'
+  - id: press_zone
+    type: int
+    initial_value: '0'   # 0=none, 1=arc, 2=center, 3=other
+  - id: press_last_x
+    type: int
+    initial_value: '0'
+  - id: press_last_y
+    type: int
+    initial_value: '0'
+
+output:
+  - platform: ledc
+    pin: GPIO2
+    id: backlight_pwm
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Display Backlight"
+    id: display_backlight
+    default_transition_length: 500ms
+    restore_mode: ALWAYS_ON
+
+spi:
+  clk_pin: GPIO19
+  mosi_pin: GPIO18
+  miso_pin: GPIO20
+
+i2c:
+  sda: GPIO22
+  scl: GPIO23
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 16
+  - file: "gfonts://Roboto"
+    id: font_large
+    size: 24
+
+# Anthem AV sensors (unchanged)
+sensor:
+  - platform: homeassistant
+    entity_id: media_player.anthem_av
+    attribute: volume_level
+    id: anthem_volume
+    name: "Anthem Volume"
+    accuracy_decimals: 2
+  - platform: homeassistant
+    entity_id: media_player.anthem_av
+    attribute: is_volume_muted
+    id: anthem_muted_sensor
+    name: "Anthem Muted Sensor"
+
+text_sensor:
+  - platform: homeassistant
+    entity_id: media_player.anthem_av
+    attribute: source
+    id: anthem_source
+    name: "Anthem Source"
+  - platform: homeassistant
+    entity_id: media_player.anthem_av
+    attribute: source_list
+    id: anthem_source_list
+    name: "Anthem Source List"
+
+online_image:
+  - id: np_art
+    url: "http://${np_host_1}:${np_port}/artwork.jpg?w=${np_art_size}&id=init"
+    format: JPEG
+    type: RGB565
+    resize: ${np_art_size}x${np_art_size}
+    update_interval: never
+    on_download_finished:
+      then:
+        - lambda: 'id(np_artwork_loaded) = true;'
+    on_error:
+      then:
+        - lambda: 'id(np_artwork_loaded) = false;'
+
+script:
+  # Anthem scripts (unchanged)
+  - id: set_volume
+    then:
+      - homeassistant.service:
+          service: media_player.volume_set
+          data:
+            entity_id: media_player.anthem_av
+          data_template:
+            volume_level: "{{ volume_level }}"
+          variables:
+            volume_level: !lambda 'return id(target_volume);'
+  - id: toggle_mute
+    then:
+      - homeassistant.service:
+          service: media_player.volume_mute
+          data:
+            entity_id: media_player.anthem_av
+          data_template:
+            is_volume_muted: "{{ is_muted }}"
+          variables:
+            is_muted: !lambda 'return id(anthem_muted_sensor).state < 0.5;'
+  - id: select_source
+    then:
+      - homeassistant.service:
+          service: media_player.select_source
+          data:
+            entity_id: media_player.anthem_av
+          data_template:
+            source: "{{ source_name }}"
+          variables:
+            source_name: !lambda 'return id(selected_source);'
+
+  # Parse one host's /now response. Called from on_response.
+  # If the response indicates active playback (rate > 0), apply it and mark
+  # this host as active. Otherwise apply only if no active host yet, or if
+  # this IS the current active host (so pauses/title updates land).
+  - id: np_apply_response
+    mode: single
+    parameters:
+      host: string
+      body: string
+      status: int
+    then:
+      - lambda: |-
+          if (status != 200 || body.empty()) return;
+          ArduinoJson::JsonDocument doc;
+          auto err = ArduinoJson::deserializeJson(doc, body);
+          if (err) { ESP_LOGW("np", "json parse: %s", err.c_str()); return; }
+
+          bool playing = doc["playing"] | false;
+          float rate = doc["playbackRate"] | 0.0f;
+          bool is_active = (id(np_active_host) == host);
+          bool have_active_playing = !id(np_active_host).empty() && id(np_rate) > 0.0f;
+
+          // Decide whether to commit this response to the shared state.
+          // Prefer actively-playing hosts. Don't clobber a playing host
+          // with a paused reading from a different host.
+          bool commit = false;
+          if (playing && rate > 0.0f) {
+            // Actively playing wins unless another host is already playing
+            // and this isn't it.
+            commit = !have_active_playing || is_active;
+          } else if (playing) {
+            // Paused with content. Only commit if no one is playing AND
+            // (we're the active host OR there's no active host).
+            commit = !have_active_playing && (is_active || id(np_active_host).empty());
+          } else {
+            // Nothing on this host. Clear only if we're currently active.
+            if (is_active) {
+              id(np_playing) = false;
+              id(np_active_host) = "";
+            }
+            return;
+          }
+
+          if (!commit) return;
+
+          id(np_active_host) = host;
+          id(np_playing) = true;
+          id(np_title) = std::string(doc["title"] | "");
+          id(np_artist) = std::string(doc["artist"] | "");
+          std::string new_track = std::string(doc["trackId"] | "");
+          std::string new_art = std::string(doc["artworkId"] | "");
+          id(np_duration) = doc["duration"] | 0.0f;
+          id(np_elapsed) = doc["elapsed"] | 0.0f;
+          id(np_rate) = rate;
+          id(np_anchor_ms) = millis();
+
+          bool track_changed = (new_track != id(np_track_id));
+          bool art_changed = (new_art != id(np_artwork_id));
+          id(np_track_id) = new_track;
+          id(np_artwork_id) = new_art;
+
+          if (art_changed && !new_art.empty()) {
+            std::string url = "http://" + host + ":${np_port}/artwork.jpg?w=${np_art_size}&id=" + new_art;
+            ESP_LOGI("np", "new artwork: %s", url.c_str());
+            id(np_art).set_url(url.c_str());
+            id(np_art).update();
+            id(np_artwork_loaded) = false;  // set true on_download_finished
+          }
+
+  - id: np_send_control
+    mode: single
+    parameters:
+      action: string
+    then:
+      - if:
+          condition:
+            and:
+              - wifi.connected:
+              - lambda: 'return !id(np_active_host).empty();'
+          then:
+            - http_request.post:
+                url: !lambda |-
+                  return std::string("http://") + id(np_active_host) + ":${np_port}/" + action;
+                body: ""
+                capture_response: false
+
+interval:
+  # Dim after 30s of no touch (unchanged)
+  - interval: 1s
+    then:
+      - lambda: |-
+          unsigned long now = millis();
+          if (!id(display_dimmed) && id(last_touch_time) > 0 && (now - id(last_touch_time)) > 30000) {
+            auto call = id(display_backlight).turn_on();
+            call.set_brightness(0.1);
+            call.perform();
+            id(display_dimmed) = true;
+          }
+
+  # Poll both Macs for now-playing state. Gated on WiFi up so we don't
+  # spam "Not connected to network" during boot / disconnects.
+  - interval: 1500ms
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - http_request.get:
+                url: "http://${np_host_1}:${np_port}/now"
+                capture_response: true
+                on_response:
+                  then:
+                    - script.execute:
+                        id: np_apply_response
+                        host: "${np_host_1}"
+                        body: !lambda 'return body;'
+                        status: !lambda 'return response->status_code;'
+            - http_request.get:
+                url: "http://${np_host_2}:${np_port}/now"
+                capture_response: true
+                on_response:
+                  then:
+                    - script.execute:
+                        id: np_apply_response
+                        host: "${np_host_2}"
+                        body: !lambda 'return body;'
+                        status: !lambda 'return response->status_code;'
+
+display:
+  - platform: ili9xxx
+    model: GC9A01A
+    auto_clear_enabled: True
+    invert_colors: True
+    id: seeed_round_display
+    cs_pin: GPIO1
+    dc_pin: GPIO21
+    reset_pin: GPIO0
+    update_interval: 100ms
+    lambda: |-
+      int cx = 120;
+      int cy = 120;
+
+      it.fill(Color::BLACK);
+
+      if (id(current_screen) == 0) {
+        // === VOLUME SCREEN (unchanged from original) ===
+        int r_outer = 110;
+        int r_inner = 68;
+
+        float volume = 0.0;
+        if (id(anthem_volume).has_state()) {
+          volume = id(anthem_volume).state;
+        }
+
+        Color vol_color = Color(0, 200, 200);
+        if (id(anthem_muted_sensor).has_state() && id(anthem_muted_sensor).state > 0.5) {
+          vol_color = Color(200, 50, 50);
+        }
+
+        int vol_degrees = (int)(volume * 270);
+
+        for (int deg = 0; deg <= 270; deg += 4) {
+          Color c = (deg <= vol_degrees) ? vol_color : Color(40, 40, 40);
+          for (int offset = -1; offset <= 1; offset++) {
+            float rad = (135 + deg + offset * 0.5f) * 0.01745329f;
+            float cos_a = cos(rad);
+            float sin_a = sin(rad);
+            int x1 = cx + (int)(r_inner * cos_a);
+            int y1 = cy + (int)(r_inner * sin_a);
+            int x2 = cx + (int)(r_outer * cos_a);
+            int y2 = cy + (int)(r_outer * sin_a);
+            it.line(x1, y1, x2, y2, c);
+          }
+        }
+
+        it.filled_circle(cx, cy, 55, Color(40, 40, 40));
+        it.circle(cx, cy, 55, Color(80, 80, 80));
+
+        int vol_percent = (int)(volume * 100);
+        it.printf(cx, cy - 20, id(font_large), TextAlign::CENTER, "%d%%", vol_percent);
+
+        if (id(anthem_source).has_state()) {
+          it.printf(cx, cy + 15, id(font_small), TextAlign::CENTER, "%s", id(anthem_source).state.c_str());
+        }
+
+      } else if (id(current_screen) == 1) {
+        // === SOURCE SELECTOR SCREEN (unchanged from original) ===
+        std::string current_source = "";
+        if (id(anthem_source).has_state()) {
+          current_source = id(anthem_source).state;
+        }
+
+        std::vector<std::string> sources;
+        if (id(anthem_source_list).has_state()) {
+          std::string list = id(anthem_source_list).state;
+          if (!list.empty() && list.front() == '[') list.erase(0, 1);
+          if (!list.empty() && list.back() == ']') list.pop_back();
+          size_t start = 0;
+          while (start < list.length()) {
+            while (start < list.length() && (list[start] == ' ' || list[start] == ',')) start++;
+            if (start >= list.length()) break;
+            std::string token;
+            if (list[start] == '\'' || list[start] == '"') {
+              char quote = list[start];
+              start++;
+              size_t end = list.find(quote, start);
+              if (end != std::string::npos) {
+                token = list.substr(start, end - start);
+                start = end + 1;
+              }
+            } else {
+              size_t end = list.find(',', start);
+              if (end == std::string::npos) end = list.length();
+              token = list.substr(start, end - start);
+              while (!token.empty() && token.back() == ' ') token.pop_back();
+              start = end + 1;
+            }
+            if (!token.empty()) sources.push_back(token);
+          }
+        }
+
+        int num_sources = sources.size() > 4 ? 4 : sources.size();
+        int row_height = 36;
+        int start_y = 50;
+
+        for (int i = 0; i < num_sources; i++) {
+          int row_y = start_y + i * row_height;
+          bool is_current = (current_source == sources[i]);
+          if (is_current) {
+            it.filled_rectangle(30, row_y - 12, 180, 28, Color(0, 100, 100));
+          }
+          Color text_color = is_current ? Color(255, 255, 255) : Color(180, 180, 180);
+          it.printf(cx, row_y, id(font_medium), text_color, TextAlign::CENTER, "%s", sources[i].c_str());
+        }
+
+        if (num_sources == 0) {
+          it.printf(cx, cy, id(font_small), TextAlign::CENTER, "No sources");
+        }
+
+        it.filled_rectangle(60, 195, 120, 30, Color(80, 40, 40));
+        it.printf(cx, 210, id(font_small), TextAlign::CENTER, "Back");
+
+      } else if (id(current_screen) == 2) {
+        // === NOW PLAYING SCREEN ===
+
+        // Artwork: 180x180 centered at (30,30)..(210,210). Corners clip to bezel.
+        int art_size = ${np_art_size};
+        int art_x = cx - art_size / 2;
+        int art_y = cy - art_size / 2;
+        if (id(np_playing) && id(np_artwork_loaded)) {
+          it.image(art_x, art_y, id(np_art));
+        } else {
+          it.filled_circle(cx, cy, 90, Color(20, 20, 20));
+        }
+
+        // Dim bottom band for text legibility (y 150..240)
+        for (int y = 150; y < 240; y++) {
+          // Fade stronger as we go down.
+          uint8_t a = (y - 150) * 255 / 90;  // 0..255
+          // Approximate alpha by lerp to black with a mask pattern.
+          if ((y & 1) == 0) {
+            // every other row full black at bottom edge
+            if (a > 180) it.line(20, y, 220, y, Color(0, 0, 0));
+          }
+          if (a > 220) it.line(0, y, 240, y, Color(0, 0, 0));
+        }
+        it.filled_rectangle(0, 200, 240, 40, Color(0, 0, 0));
+
+        // Title + artist
+        if (id(np_playing)) {
+          std::string title = id(np_title);
+          if (title.length() > 28) title = title.substr(0, 26) + "..";
+          std::string artist = id(np_artist);
+          if (artist.length() > 30) artist = artist.substr(0, 28) + "..";
+          it.printf(cx, 208, id(font_medium), Color(255,255,255), TextAlign::CENTER, "%s", title.c_str());
+          it.printf(cx, 226, id(font_small), Color(180,180,180), TextAlign::CENTER, "%s", artist.c_str());
+        } else {
+          it.printf(cx, 215, id(font_medium), Color(180,180,180), TextAlign::CENTER, "Nothing playing");
+        }
+
+        // Progress arc on outer ring. Starts at 12 o'clock, goes clockwise.
+        // Anchor-based extrapolation for smoothness between polls.
+        float elapsed = id(np_elapsed);
+        if (id(np_rate) > 0.0f && id(np_anchor_ms) > 0) {
+          elapsed += (millis() - id(np_anchor_ms)) / 1000.0f * id(np_rate);
+        }
+        float frac = 0.0f;
+        if (id(np_duration) > 0.0f) frac = elapsed / id(np_duration);
+        if (frac < 0.0f) frac = 0.0f;
+        if (frac > 1.0f) frac = 1.0f;
+
+        int r_out = 119;
+        int r_in = 114;
+        int prog_deg = (int)(frac * 360.0f);
+        for (int deg = 0; deg < 360; deg += 2) {
+          Color c = (deg <= prog_deg) ? Color(255, 255, 255) : Color(40, 40, 40);
+          // Start at top: -90° in atan2, so shift by -90.
+          float rad = (deg - 90) * 0.01745329f;
+          float cos_a = cos(rad);
+          float sin_a = sin(rad);
+          int x1 = cx + (int)(r_in * cos_a);
+          int y1 = cy + (int)(r_in * sin_a);
+          int x2 = cx + (int)(r_out * cos_a);
+          int y2 = cy + (int)(r_out * sin_a);
+          it.line(x1, y1, x2, y2, c);
+        }
+
+        // Play/pause glyph in center bottom below the band? No — overlay on artwork.
+        // Tap zones shown subtly: left/center/right chevrons.
+        // Actually keep UI minimal; zones are invisible but exist for touch.
+      }
+
+touchscreen:
+  platform: chsc6x
+  id: seeed_round_touchscreen
+  display: seeed_round_display
+  interrupt_pin: GPIO17
+  on_touch:
+    - lambda: |-
+        id(last_touch_time) = millis();
+        if (id(display_dimmed)) {
+          auto call = id(display_backlight).turn_on();
+          call.set_brightness(1.0);
+          call.perform();
+          id(display_dimmed) = false;
+          return;
+        }
+
+        int cx = 120;
+        int cy = 120;
+        int tx = touch.x;
+        int ty = touch.y;
+
+        // Always track last touch position so on_release can read it.
+        id(press_last_x) = tx;
+        id(press_last_y) = ty;
+
+        // Register start-of-press once per touch session.
+        if (id(press_start_ms) == 0) {
+          id(press_start_ms) = millis();
+          if (id(current_screen) == 0) {
+            int dx = tx - cx;
+            int dy = ty - cy;
+            float dist = sqrt(dx*dx + dy*dy);
+            if (dist < 60) id(press_zone) = 2;         // center
+            else if (dist > 62 && dist < 116) id(press_zone) = 1;  // arc
+            else id(press_zone) = 3;
+          } else {
+            id(press_zone) = 3;
+          }
+        }
+
+        if (id(current_screen) == 0) {
+          // Arc drag still fires continuously, unchanged.
+          int dx = tx - cx;
+          int dy = ty - cy;
+          float dist = sqrt(dx*dx + dy*dy);
+
+          if (dist > 62 && dist < 116) {
+            float angle = atan2(dy, dx) * 180.0 / 3.14159;
+            float touch_volume;
+            if (angle >= 135.0) {
+              touch_volume = (angle - 135.0) / 270.0;
+            } else if (angle >= -180.0 && angle < -135.0) {
+              touch_volume = (angle + 360.0 - 135.0) / 270.0;
+            } else if (angle >= -135.0 && angle <= 45.0) {
+              touch_volume = (angle + 225.0) / 270.0;
+            } else {
+              return;
+            }
+            if (touch_volume < 0.0) touch_volume = 0.0;
+            if (touch_volume > 1.0) touch_volume = 1.0;
+
+            float current_vol = 0.0;
+            if (id(anthem_volume).has_state()) current_vol = id(anthem_volume).state;
+
+            float vol_diff = abs(touch_volume - current_vol);
+            if (!id(drag_active) && vol_diff < 0.15) {
+              id(drag_active) = true;
+            }
+            if (id(drag_active)) {
+              id(target_volume) = touch_volume;
+              id(set_volume).execute();
+            }
+          }
+          // Note: center-tap / long-press handled in on_release.
+
+        } else if (id(current_screen) == 1) {
+          // === SOURCE SELECTOR TOUCH (unchanged) ===
+          std::vector<std::string> sources;
+          if (id(anthem_source_list).has_state()) {
+            std::string list = id(anthem_source_list).state;
+            if (!list.empty() && list.front() == '[') list.erase(0, 1);
+            if (!list.empty() && list.back() == ']') list.pop_back();
+            size_t start = 0;
+            while (start < list.length()) {
+              while (start < list.length() && (list[start] == ' ' || list[start] == ',')) start++;
+              if (start >= list.length()) break;
+              std::string token;
+              if (list[start] == '\'' || list[start] == '"') {
+                char quote = list[start];
+                start++;
+                size_t end = list.find(quote, start);
+                if (end != std::string::npos) {
+                  token = list.substr(start, end - start);
+                  start = end + 1;
+                }
+              } else {
+                size_t end = list.find(',', start);
+                if (end == std::string::npos) end = list.length();
+                token = list.substr(start, end - start);
+                while (!token.empty() && token.back() == ' ') token.pop_back();
+                start = end + 1;
+              }
+              if (!token.empty()) sources.push_back(token);
+            }
+          }
+
+          int num_sources = sources.size() > 4 ? 4 : sources.size();
+          int row_height = 36;
+          int start_y = 50;
+
+          for (int i = 0; i < num_sources; i++) {
+            int row_y = start_y + i * row_height;
+            if (tx >= 30 && tx <= 210 && ty >= row_y - 12 && ty <= row_y + 16) {
+              id(selected_source) = sources[i];
+              id(select_source).execute();
+              id(current_screen) = 0;
+              return;
+            }
+          }
+
+          if (tx >= 60 && tx <= 180 && ty >= 195 && ty <= 225) {
+            id(current_screen) = 0;
+          }
+        }
+        // Screen 2 control dispatch is in on_release (tap vs long-press).
+
+  on_release:
+    - lambda: |-
+        unsigned long duration = id(press_start_ms) > 0 ? (millis() - id(press_start_ms)) : 0;
+        bool long_press = duration >= 600;
+        int zone = id(press_zone);
+        int screen = id(current_screen);
+
+        // Reset press tracking immediately so next press starts clean.
+        id(press_start_ms) = 0;
+        id(press_zone) = 0;
+
+        if (id(drag_active)) {
+          id(drag_active) = false;
+          return;
+        }
+
+        // Screen 0: center region. Long = now-playing, short = source select.
+        if (screen == 0 && zone == 2) {
+          if (long_press) {
+            id(current_screen) = 2;
+          } else {
+            id(current_screen) = 1;
+          }
+          return;
+        }
+
+        // Screen 2: long-press returns home, short tap dispatches control
+        // by horizontal third (left=prev, mid=toggle, right=next).
+        if (screen == 2) {
+          if (long_press) {
+            id(current_screen) = 0;
+            return;
+          }
+          int tx = id(press_last_x);
+          if (tx < 80) {
+            id(np_send_control)->execute(std::string("previous"));
+          } else if (tx < 160) {
+            id(np_send_control)->execute(std::string("toggle"));
+          } else {
+            id(np_send_control)->execute(std::string("next"));
+          }
+          return;
+        }

@@ -1,0 +1,331 @@
+#include "ui.h"
+#include "serial.h"
+#include "esp_lvgl_port.h"
+#include "libs/qrcode/lv_qrcode.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include <string.h>
+#include <stdio.h>
+
+static const char *TAG = "ui";
+
+#define S 240   /* screen size */
+#define SETUP_URL "https://github.com/glenravens/now-playing"
+
+/* ── Widgets ──────────────────────────────────────────────────── */
+
+/* Setup screen (shown until first data arrives) */
+static lv_obj_t *setup_screen;
+static lv_obj_t *qr_widget;
+
+/* Now-playing screen */
+static lv_obj_t *art_img;
+static lv_obj_t *fade;       /* gradient strip above overlay */
+static lv_obj_t *overlay;
+static lv_obj_t *title_label;
+static lv_obj_t *artist_label;
+static lv_obj_t *elapsed_label;
+static lv_obj_t *remaining_label;
+static lv_obj_t *progress_bar;
+static lv_obj_t *btn_prev;
+static lv_obj_t *btn_toggle;
+static lv_obj_t *btn_next;
+static lv_obj_t *toggle_label;
+static lv_obj_t *idle_label;
+
+static lv_image_dsc_t art_dsc;
+
+/* State */
+static float s_elapsed, s_rate, s_duration;
+static uint32_t s_anchor_ms;
+static bool s_has_data;
+static bool s_connected;   /* true after first state update */
+
+/* ── Helpers ──────────────────────────────────────────────────── */
+
+static void fmt_time(char *buf, int size, float secs)
+{
+    if (secs < 0) secs = 0;
+    int s = (int)secs;
+    int m = s / 60;
+    s %= 60;
+    snprintf(buf, size, "%d:%02d", m, s);
+}
+
+/* ── Progress timer ───────────────────────────────────────────── */
+
+static void progress_timer_cb(lv_timer_t *t)
+{
+    if (!s_has_data || s_duration <= 0) return;
+
+    uint32_t now = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    float dt = (float)(now - s_anchor_ms) / 1000.0f;
+    float e = s_elapsed + dt * s_rate;
+    if (e < 0) e = 0;
+    if (e > s_duration) e = s_duration;
+
+    lv_bar_set_value(progress_bar, (int)(e / s_duration * 1000.0f), LV_ANIM_OFF);
+
+    char buf[16];
+    fmt_time(buf, sizeof(buf), e);
+    lv_label_set_text(elapsed_label, buf);
+
+    char rbuf[16];
+    rbuf[0] = '-';
+    fmt_time(rbuf + 1, sizeof(rbuf) - 1, s_duration - e);
+    lv_label_set_text(remaining_label, rbuf);
+}
+
+/* ── Touch handlers ───────────────────────────────────────────── */
+
+static void on_prev(lv_event_t *ev)    { serial_send_command("previous"); }
+static void on_toggle(lv_event_t *ev)  { serial_send_command("toggle"); }
+static void on_next(lv_event_t *ev)    { serial_send_command("next"); }
+
+/* ── Button helper ────────────────────────────────────────────── */
+
+static lv_obj_t *make_btn(lv_obj_t *parent, const char *sym, int sz,
+                           lv_event_cb_t cb)
+{
+    lv_obj_t *btn = lv_button_create(parent);
+    lv_obj_set_size(btn, sz, sz);
+    lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(btn, 100, 0);
+    lv_obj_set_style_border_width(btn, 0, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, sym);
+    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
+    lv_obj_center(lbl);
+    return btn;
+}
+
+/* ── Setup screen (QR code) ───────────────────────────────────── */
+
+static void create_setup_screen(lv_obj_t *scr)
+{
+    setup_screen = lv_obj_create(scr);
+    lv_obj_set_size(setup_screen, S, S);
+    lv_obj_set_pos(setup_screen, 0, 0);
+    lv_obj_set_style_bg_color(setup_screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(setup_screen, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(setup_screen, 0, 0);
+    lv_obj_set_style_pad_all(setup_screen, 0, 0);
+    lv_obj_remove_flag(setup_screen, LV_OBJ_FLAG_SCROLLABLE);
+
+    /* Title */
+    lv_obj_t *lbl = lv_label_create(setup_screen);
+    lv_label_set_text(lbl, "Now Playing");
+    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
+    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, 30);
+
+    /* QR code */
+    qr_widget = lv_qrcode_create(setup_screen);
+    lv_qrcode_set_size(qr_widget, 120);
+    lv_qrcode_set_dark_color(qr_widget, lv_color_white());
+    lv_qrcode_set_light_color(qr_widget, lv_color_black());
+    lv_qrcode_update(qr_widget, SETUP_URL, strlen(SETUP_URL));
+    lv_obj_center(qr_widget);
+
+    /* Instruction */
+    lv_obj_t *hint = lv_label_create(setup_screen);
+    lv_label_set_text(hint, "Scan to set up");
+    lv_obj_set_style_text_color(hint, lv_color_make(150, 150, 150), 0);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_12, 0);
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -35);
+}
+
+/* ── Now-playing screen ───────────────────────────────────────── */
+
+static void create_playing_screen(lv_obj_t *scr)
+{
+    /* Full-screen album art */
+    art_img = lv_image_create(scr);
+    lv_obj_set_size(art_img, S, S);
+    lv_obj_set_pos(art_img, 0, 0);
+    lv_obj_add_flag(art_img, LV_OBJ_FLAG_HIDDEN);
+
+    /* Soft fade strip — blurs the boundary between album art and overlay */
+    fade = lv_obj_create(scr);
+    lv_obj_set_size(fade, S, 56);
+    lv_obj_align(fade, LV_ALIGN_BOTTOM_MID, 0, -146);  /* sits just above overlay */
+    lv_obj_set_style_bg_color(fade, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(fade, 0, 0);
+    lv_obj_set_style_bg_grad_color(fade, lv_color_black(), 0);
+    lv_obj_set_style_bg_grad_opa(fade, 170, 0);
+    lv_obj_set_style_bg_grad_dir(fade, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_border_width(fade, 0, 0);
+    lv_obj_set_style_radius(fade, 0, 0);
+    lv_obj_set_style_pad_all(fade, 0, 0);
+    lv_obj_remove_flag(fade, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(fade, LV_OBJ_FLAG_HIDDEN);
+
+    /* Semi-transparent overlay */
+    overlay = lv_obj_create(scr);
+    lv_obj_set_size(overlay, S, 138);
+    lv_obj_align(overlay, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(overlay, 170, 0);
+    lv_obj_set_style_border_width(overlay, 0, 0);
+    lv_obj_set_style_radius(overlay, 0, 0);
+    lv_obj_set_style_pad_all(overlay, 0, 0);
+    lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+
+    /* Title */
+    title_label = lv_label_create(overlay);
+    lv_obj_set_width(title_label, S - 4);
+    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 8);
+    lv_label_set_text(title_label, "");
+    lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(title_label, LV_LABEL_LONG_SCROLL);
+
+    /* Artist */
+    artist_label = lv_label_create(overlay);
+    lv_obj_set_width(artist_label, 200);
+    lv_obj_align(artist_label, LV_ALIGN_TOP_MID, 0, 32);
+    lv_label_set_text(artist_label, "");
+    lv_obj_set_style_text_color(artist_label, lv_color_make(200, 200, 200), 0);
+    lv_obj_set_style_text_font(artist_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(artist_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(artist_label, LV_LABEL_LONG_SCROLL);
+
+    /* Progress row: elapsed | bar | remaining */
+    elapsed_label = lv_label_create(overlay);
+    lv_obj_align(elapsed_label, LV_ALIGN_TOP_LEFT, 30, 52);
+    lv_label_set_text(elapsed_label, "0:00");
+    lv_obj_set_style_text_color(elapsed_label, lv_color_make(180, 180, 180), 0);
+    lv_obj_set_style_text_font(elapsed_label, &lv_font_montserrat_12, 0);
+
+    progress_bar = lv_bar_create(overlay);
+    lv_obj_set_size(progress_bar, 100, 3);
+    lv_obj_align(progress_bar, LV_ALIGN_TOP_MID, 0, 58);
+    lv_bar_set_range(progress_bar, 0, 1000);
+    lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(progress_bar, lv_color_make(60, 60, 60), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(progress_bar, lv_color_white(), LV_PART_INDICATOR);
+    lv_obj_set_style_radius(progress_bar, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(progress_bar, 2, LV_PART_INDICATOR);
+
+    remaining_label = lv_label_create(overlay);
+    lv_obj_align(remaining_label, LV_ALIGN_TOP_RIGHT, -28, 52);
+    lv_label_set_text(remaining_label, "-0:00");
+    lv_obj_set_style_text_color(remaining_label, lv_color_make(180, 180, 180), 0);
+    lv_obj_set_style_text_font(remaining_label, &lv_font_montserrat_12, 0);
+
+    /* Control buttons — large, well-spaced */
+    btn_prev = make_btn(overlay, LV_SYMBOL_PREV, 38, on_prev);
+    lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_MID, -64, -14);
+
+    btn_toggle = make_btn(overlay, LV_SYMBOL_PLAY, 60, on_toggle);
+    lv_obj_align(btn_toggle, LV_ALIGN_BOTTOM_MID, 0, -8);
+    toggle_label = lv_obj_get_child(btn_toggle, 0);
+
+    btn_next = make_btn(overlay, LV_SYMBOL_NEXT, 38, on_next);
+    lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 64, -14);
+
+    /* Idle label (nothing playing but connected) */
+    idle_label = lv_label_create(scr);
+    lv_obj_center(idle_label);
+    lv_label_set_text(idle_label, "Nothing playing");
+    lv_obj_set_style_text_color(idle_label, lv_color_make(120, 120, 120), 0);
+    lv_obj_set_style_text_font(idle_label, &lv_font_montserrat_16, 0);
+    lv_obj_add_flag(idle_label, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* ── Public API ───────────────────────────────────────────────── */
+
+void ui_init(void)
+{
+    if (!lvgl_port_lock(0)) return;
+
+    lv_obj_t *scr = lv_scr_act();
+    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+
+    create_playing_screen(scr);
+    create_setup_screen(scr);   /* on top initially */
+
+    lv_timer_create(progress_timer_cb, 100, NULL);
+
+    lvgl_port_unlock();
+    ESP_LOGI(TAG, "UI ready (showing setup QR)");
+}
+
+void ui_update_from_state(const np_state_t *state, const uint8_t *art_pixels,
+                          int art_size)
+{
+    if (!lvgl_port_lock(pdMS_TO_TICKS(200))) return;
+
+    /* First data received — dismiss setup screen forever */
+    if (!s_connected) {
+        s_connected = true;
+        lv_obj_add_flag(setup_screen, LV_OBJ_FLAG_HIDDEN);
+        ESP_LOGI(TAG, "connected — hiding setup QR");
+    }
+
+    if (!state->playing) {
+        lv_obj_add_flag(art_img, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(fade, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(idle_label, LV_OBJ_FLAG_HIDDEN);
+        s_has_data = false;
+        lvgl_port_unlock();
+        return;
+    }
+
+    lv_obj_add_flag(idle_label, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(art_img, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(fade, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+
+    lv_label_set_text(title_label, state->title);
+    lv_label_set_text(artist_label, state->artist);
+    lv_label_set_text(toggle_label,
+        state->playback_rate > 0 ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+
+    if (art_pixels) {
+        art_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+        art_dsc.header.w = art_size;
+        art_dsc.header.h = art_size;
+        art_dsc.data = art_pixels;
+        art_dsc.data_size = art_size * art_size * 2;
+        lv_image_set_src(art_img, &art_dsc);
+    }
+
+    /* Only reset the interpolation anchor when there's a meaningful
+       change (track change, seek, rate change).  Otherwise let the
+       local interpolation run smoothly to avoid flicker. */
+    s_duration = state->duration;
+
+    if (!s_has_data || state->playback_rate != s_rate) {
+        /* Rate changed or first update — hard reset */
+        s_elapsed = state->elapsed;
+        s_anchor_ms = state->fetch_time_ms;
+        s_rate = state->playback_rate;
+    } else {
+        /* Compare server elapsed vs our interpolated elapsed */
+        uint32_t now = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+        float dt = (float)(now - s_anchor_ms) / 1000.0f;
+        float local_e = s_elapsed + dt * s_rate;
+        float drift = state->elapsed - local_e;
+
+        if (drift > 2.0f || drift < -2.0f) {
+            /* Seek or track change — hard reset */
+            s_elapsed = state->elapsed;
+            s_anchor_ms = state->fetch_time_ms;
+        }
+        /* else: keep current anchor, it's close enough */
+    }
+
+    s_has_data = true;
+
+    lvgl_port_unlock();
+}

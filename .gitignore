@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# py2app
+build/
+dist/
+
+# ESP-IDF
+firmware/esp-idf/build/
+firmware/esp-idf/sdkconfig
+firmware/esp-idf/sdkconfig.old
+firmware/esp-idf/managed_components/
+firmware/esp-idf/dependencies.lock
+
+# macOS
+.DS_Store

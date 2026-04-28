@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Now Playing</title>
+<style>
+  :root {
+    --size: 480px;
+    --bg: #000;
+    --fg: #fff;
+    --dim: #aaa;
+    --dim2: #888;
+  }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #111; color: var(--fg);
+    font: 14px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    display: grid; place-items: center;
+  }
+
+  /* Circular device frame */
+  .device {
+    width: var(--size); height: var(--size);
+    border-radius: 50%;
+    background: var(--bg);
+    box-shadow: 0 0 0 10px #222, 0 0 60px rgba(0,0,0,.8);
+    position: relative; overflow: hidden;
+  }
+
+  /* Full-bleed album art background */
+  .art-bg {
+    position: absolute; inset: 0;
+    background: #111 center/cover no-repeat;
+  }
+
+  /* Semi-transparent overlay on bottom half */
+  .overlay {
+    position: absolute; bottom: 16px; left: 0; right: 0;
+    height: 260px;
+    background: rgba(0,0,0,.7);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    padding: 12px 40px 20px;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .title {
+    font-size: 18px; font-weight: 600; line-height: 1.2;
+    max-height: 2.4em; overflow: hidden;
+    margin-bottom: 2px;
+  }
+  .artist { color: var(--dim); font-size: 14px; margin-bottom: 12px; }
+
+  /* Progress row */
+  .progress-row {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; max-width: 320px;
+    color: var(--dim2); font-size: 11px; font-variant-numeric: tabular-nums;
+    margin-bottom: 16px;
+  }
+  .progress {
+    flex: 1; height: 3px; background: #444; border-radius: 2px; position: relative;
+  }
+  .progress > div {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--fg); border-radius: 2px; width: 0%;
+  }
+
+  /* Control buttons */
+  .controls {
+    display: flex; justify-content: center; gap: 24px; align-items: center;
+  }
+  button {
+    border: 0; color: var(--fg);
+    cursor: pointer; padding: 0;
+    transition: transform .1s;
+    border-radius: 50%;
+    background: rgba(255,255,255,.12);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    width: 52px; height: 52px;
+  }
+  button:active { transform: scale(.9); }
+  .toggle {
+    font-size: 32px;
+    width: 64px; height: 64px;
+  }
+
+  .idle {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    color: var(--dim2); font-size: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="art-bg" id="artBg"></div>
+  <div class="overlay" id="overlay" style="display:none">
+    <div class="title" id="title"></div>
+    <div class="artist" id="artist"></div>
+    <div class="progress-row">
+      <span id="elapsed">0:00</span>
+      <div class="progress"><div id="bar"></div></div>
+      <span id="remaining">-0:00</span>
+    </div>
+    <div class="controls">
+      <button title="Previous" onclick="ctrl('previous')">⏮</button>
+      <button class="toggle" id="toggle" title="Play/Pause" onclick="ctrl('toggle')">▶</button>
+      <button title="Next" onclick="ctrl('next')">⏭</button>
+    </div>
+  </div>
+  <div class="idle" id="idle">Nothing playing</div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const fmt = (s) => {
+    if (!s || !isFinite(s)) return "0:00";
+    s = Math.max(0, Math.floor(s));
+    return `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+  };
+  let lastArtworkId = "";
+  let lastServerFetch = 0;
+  let haveData = false;
+  let localElapsed = 0, localRate = 0, localDuration = 0;
+
+  async function refresh() {
+    try {
+      const r = await fetch("/now", { cache: "no-store" });
+      const d = await r.json();
+      lastServerFetch = performance.now();
+      localElapsed = d.elapsed || 0;
+      localRate = d.playbackRate || 0;
+      localDuration = d.duration || 0;
+      haveData = true;
+
+      if (!d.playing) {
+        $("overlay").style.display = "none";
+        $("idle").style.display = "";
+        $("artBg").style.backgroundImage = "";
+        lastArtworkId = "";
+        return;
+      }
+
+      $("idle").style.display = "none";
+      $("overlay").style.display = "";
+
+      $("title").textContent = d.title;
+      $("artist").textContent = [d.artist, d.album].filter(Boolean).join(" \u2014 ");
+      $("toggle").textContent = localRate > 0 ? "\u23F8" : "\u25B6";
+
+      if (d.artworkId && d.artworkId !== lastArtworkId) {
+        $("artBg").style.backgroundImage = `url(/artwork.jpg?id=${d.artworkId})`;
+        lastArtworkId = d.artworkId;
+      } else if (!d.artworkId && lastArtworkId) {
+        $("artBg").style.backgroundImage = "";
+        lastArtworkId = "";
+      }
+    } catch (e) { /* server down */ }
+  }
+
+  function tick() {
+    if (!haveData) return;
+    const dt = (performance.now() - lastServerFetch) / 1000;
+    const e = Math.max(0, localElapsed + dt * localRate);
+    $("elapsed").textContent = fmt(e);
+    $("remaining").textContent = "-" + fmt(localDuration - e);
+    const pct = localDuration > 0 ? Math.min(100, (e / localDuration) * 100) : 0;
+    $("bar").style.width = pct + "%";
+  }
+
+  async function ctrl(action) {
+    await fetch("/" + action, { method: "POST" });
+    setTimeout(refresh, 150);
+  }
+
+  refresh();
+  setInterval(refresh, 1500);
+  setInterval(tick, 250);
+</script>
+</body>
+</html>
