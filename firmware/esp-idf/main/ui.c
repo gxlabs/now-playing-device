@@ -38,6 +38,7 @@ static lv_image_dsc_t art_dsc;
 
 /* State */
 static float s_elapsed, s_rate, s_duration;
+static float s_last_play_rate = 1.0f;   /* remembers rate so resume matches it */
 static uint32_t s_anchor_ms;
 static bool s_has_data;
 static bool s_connected;   /* true after first state update */
@@ -80,8 +81,28 @@ static void progress_timer_cb(lv_timer_t *t)
 /* ── Touch handlers ───────────────────────────────────────────── */
 
 static void on_prev(lv_event_t *ev)    { serial_send_command("previous"); }
-static void on_toggle(lv_event_t *ev)  { serial_send_command("toggle"); }
 static void on_next(lv_event_t *ev)    { serial_send_command("next"); }
+
+/* Optimistic toggle: flip the play/pause icon and freeze/resume progress
+   locally before the server confirms — feels instant. The next state update
+   from the Mac will overwrite this if it diverges. */
+static void on_toggle(lv_event_t *ev)
+{
+    if (s_has_data) {
+        bool was_playing = s_rate > 0.0f;
+        uint32_t now = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+        float dt = (float)(now - s_anchor_ms) / 1000.0f;
+        float local_e = s_elapsed + dt * s_rate;
+        if (local_e < 0) local_e = 0;
+        if (s_duration > 0 && local_e > s_duration) local_e = s_duration;
+        s_elapsed = local_e;
+        s_anchor_ms = now;
+        s_rate = was_playing ? 0.0f : s_last_play_rate;
+        lv_label_set_text(toggle_label,
+            was_playing ? LV_SYMBOL_PLAY : LV_SYMBOL_PAUSE);
+    }
+    serial_send_command("toggle");
+}
 
 /* ── Button helper ────────────────────────────────────────────── */
 
@@ -290,6 +311,7 @@ void ui_update_from_state(const np_state_t *state, const uint8_t *art_pixels,
     lv_label_set_text(artist_label, state->artist);
     lv_label_set_text(toggle_label,
         state->playback_rate > 0 ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    if (state->playback_rate > 0) s_last_play_rate = state->playback_rate;
 
     if (art_pixels) {
         art_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
