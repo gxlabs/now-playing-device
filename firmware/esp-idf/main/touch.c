@@ -1,4 +1,5 @@
 #include "touch.h"
+#include "ui.h"
 
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
@@ -18,8 +19,19 @@ static void read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
     uint8_t buf[5] = {0};
     esp_err_t ret = i2c_master_receive(s_dev, buf, sizeof(buf), pdMS_TO_TICKS(10));
+    bool pressed = (ret == ESP_OK && buf[0] > 0);
 
-    if (ret == ESP_OK && buf[0] > 0) {
+    /* If a press wakes the screen from dim, swallow that whole press so the
+       user doesn't accidentally hit prev/play/next while just trying to
+       light the screen back up. */
+    static bool s_swallow = false;
+    if (pressed) {
+        if (ui_mark_activity()) s_swallow = true;
+    } else {
+        s_swallow = false;
+    }
+
+    if (pressed && !s_swallow) {
         data->point.x = ((uint16_t)buf[1] << 8) | buf[2];
         data->point.y = ((uint16_t)buf[3] << 8) | buf[4];
         data->state = LV_INDEV_STATE_PRESSED;

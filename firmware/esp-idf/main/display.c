@@ -23,10 +23,14 @@ static const char *TAG = "display";
 #define LCD_V_RES   240
 #define SPI_HOST_ID SPI2_HOST
 
+#define BL_LEDC_MODE    LEDC_LOW_SPEED_MODE
+#define BL_LEDC_CHANNEL LEDC_CHANNEL_0
+#define BL_FADE_MS      400
+
 static void backlight_init(void)
 {
     ledc_timer_config_t timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .speed_mode = BL_LEDC_MODE,
         .duty_resolution = LEDC_TIMER_8_BIT,
         .timer_num = LEDC_TIMER_0,
         .freq_hz = 5000,
@@ -36,13 +40,21 @@ static void backlight_init(void)
 
     ledc_channel_config_t ch = {
         .gpio_num = PIN_BL,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_0,
+        .speed_mode = BL_LEDC_MODE,
+        .channel = BL_LEDC_CHANNEL,
         .timer_sel = LEDC_TIMER_0,
         .duty = 255,
         .hpoint = 0,
     };
     ledc_channel_config(&ch);
+
+    ledc_fade_func_install(0);
+}
+
+void display_set_backlight(uint8_t duty)
+{
+    ledc_set_fade_with_time(BL_LEDC_MODE, BL_LEDC_CHANNEL, duty, BL_FADE_MS);
+    ledc_fade_start(BL_LEDC_MODE, BL_LEDC_CHANNEL, LEDC_FADE_NO_WAIT);
 }
 
 void display_init(void)

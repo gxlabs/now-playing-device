@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "serial.h"
+#include "display.h"
 #include "esp_lvgl_port.h"
 #include "libs/qrcode/lv_qrcode.h"
 #include "esp_log.h"
@@ -46,6 +47,18 @@ static bool s_connected;   /* true after first state update */
 
 #define OPTIMISTIC_HOLD_MS 1500
 
+/* Idle dim — the Mac pushes state every second whether or not anything
+   changed, so "activity" specifically means a track or play/pause transition,
+   or a touch press. Pure same-track playback doesn't count. */
+#define IDLE_TIMEOUT_MS (5 * 60 * 1000)
+#define BL_FULL  255
+#define BL_DIM   20
+
+static uint32_t s_last_activity_ms;
+static bool s_dimmed;
+static char s_prev_track_id[64];
+static bool s_prev_was_playing;
+
 /* ── Helpers ──────────────────────────────────────────────────── */
 
 static void fmt_time(char *buf, int size, float secs)
@@ -55,6 +68,29 @@ static void fmt_time(char *buf, int size, float secs)
     int m = s / 60;
     s %= 60;
     snprintf(buf, size, "%d:%02d", m, s);
+}
+
+/* ── Idle dim ─────────────────────────────────────────────────── */
+
+bool ui_mark_activity(void)
+{
+    s_last_activity_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    if (s_dimmed) {
+        s_dimmed = false;
+        display_set_backlight(BL_FULL);
+        return true;
+    }
+    return false;
+}
+
+static void idle_check_cb(lv_timer_t *t)
+{
+    if (s_dimmed) return;
+    uint32_t now = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    if ((int32_t)(now - s_last_activity_ms) > IDLE_TIMEOUT_MS) {
+        s_dimmed = true;
+        display_set_backlight(BL_DIM);
+    }
 }
 
 /* ── Progress timer ───────────────────────────────────────────── */
@@ -288,6 +324,9 @@ void ui_init(void)
 
     lv_timer_create(progress_timer_cb, 100, NULL);
 
+    s_last_activity_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    lv_timer_create(idle_check_cb, 1000, NULL);
+
     lvgl_port_unlock();
     ESP_LOGI(TAG, "UI ready (showing setup QR)");
 }
@@ -303,6 +342,19 @@ void ui_update_from_state(const np_state_t *state, const uint8_t *art_pixels,
         lv_obj_add_flag(setup_screen, LV_OBJ_FLAG_HIDDEN);
         ESP_LOGI(TAG, "connected — hiding setup QR");
     }
+
+    /* Detect meaningful change for the idle dim timer. The Mac pushes state
+       every second, so we only count track changes and play/pause transitions
+       — not steady-state playback of the same track. */
+    bool now_playing_active = state->playing && state->playback_rate > 0;
+    bool track_changed = strncmp(s_prev_track_id, state->track_id,
+                                 sizeof(s_prev_track_id)) != 0;
+    if (track_changed || s_prev_was_playing != now_playing_active) {
+        ui_mark_activity();
+    }
+    strncpy(s_prev_track_id, state->track_id, sizeof(s_prev_track_id) - 1);
+    s_prev_track_id[sizeof(s_prev_track_id) - 1] = '\0';
+    s_prev_was_playing = now_playing_active;
 
     if (!state->playing) {
         lv_obj_add_flag(art_img, LV_OBJ_FLAG_HIDDEN);
