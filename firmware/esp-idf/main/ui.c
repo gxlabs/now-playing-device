@@ -235,8 +235,8 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_set_style_text_align(elapsed_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     progress_bar = lv_bar_create(overlay);
-    lv_obj_set_size(progress_bar, 124, 5);
-    lv_obj_align(progress_bar, LV_ALIGN_TOP_LEFT, 57, 57);
+    lv_obj_set_size(progress_bar, 120, 5);
+    lv_obj_align(progress_bar, LV_ALIGN_TOP_LEFT, 59, 57);
     lv_bar_set_range(progress_bar, 0, 1000);
     lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(progress_bar, lv_color_white(), LV_PART_MAIN);
