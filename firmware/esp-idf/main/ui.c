@@ -117,7 +117,7 @@ static lv_obj_t *make_btn(lv_obj_t *parent, const char *sym, int sz,
     lv_obj_set_size(btn, sz, sz);
     lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(btn, 100, 0);
+    lv_obj_set_style_bg_opa(btn, 70, 0);
     lv_obj_set_style_border_width(btn, 0, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
@@ -256,14 +256,14 @@ static void create_playing_screen(lv_obj_t *scr)
 
     /* Control buttons — large, well-spaced */
     btn_prev = make_btn(overlay, LV_SYMBOL_PREV, 38, on_prev);
-    lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_MID, -62, -14);
+    lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_MID, -62, -19);
 
     btn_toggle = make_btn(overlay, LV_SYMBOL_PLAY, 60, on_toggle);
     lv_obj_align(btn_toggle, LV_ALIGN_BOTTOM_MID, 0, -8);
     toggle_label = lv_obj_get_child(btn_toggle, 0);
 
     btn_next = make_btn(overlay, LV_SYMBOL_NEXT, 38, on_next);
-    lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 62, -14);
+    lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 62, -19);
 
     /* Idle label (nothing playing but connected) */
     idle_label = lv_label_create(scr);
