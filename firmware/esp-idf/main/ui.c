@@ -152,7 +152,7 @@ static void create_setup_screen(lv_obj_t *scr)
 
     /* QR code */
     qr_widget = lv_qrcode_create(setup_screen);
-    lv_qrcode_set_size(qr_widget, 120);
+    lv_qrcode_set_size(qr_widget, 100);
     lv_qrcode_set_dark_color(qr_widget, lv_color_white());
     lv_qrcode_set_light_color(qr_widget, lv_color_black());
     lv_qrcode_update(qr_widget, SETUP_URL, strlen(SETUP_URL));
