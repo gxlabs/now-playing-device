@@ -78,21 +78,21 @@ python setup.py py2app
 # sign
 codesign --deep --force --options runtime --timestamp \
   --sign "Developer ID Application: YOUR NAME (TEAMID)" \
-  "dist/Now Playing.app"
+  "dist/Now Playing Bridge.app"
 
 # sign nested binaries individually for notarization
-find "dist/Now Playing.app" -type f \( -name "*.so" -o -name "*.dylib" \) \
+find "dist/Now Playing Bridge.app" -type f \( -name "*.so" -o -name "*.dylib" \) \
   -exec codesign --force --options runtime --timestamp \
   --sign "Developer ID Application: YOUR NAME (TEAMID)" {} \;
 codesign --force --options runtime --timestamp \
   --sign "Developer ID Application: YOUR NAME (TEAMID)" \
-  "dist/Now Playing.app"
+  "dist/Now Playing Bridge.app"
 
 # notarize
-ditto -c -k --keepParent "dist/Now Playing.app" "dist/NowPlaying.zip"
-xcrun notarytool submit "dist/NowPlaying.zip" \
+ditto -c -k --keepParent "dist/Now Playing Bridge.app" "dist/NowPlayingBridge.zip"
+xcrun notarytool submit "dist/NowPlayingBridge.zip" \
   --keychain-profile "your-profile" --wait
-xcrun stapler staple "dist/Now Playing.app"
+xcrun stapler staple "dist/Now Playing Bridge.app"
 ```
 
 ## USB protocol

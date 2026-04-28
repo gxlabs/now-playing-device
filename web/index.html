@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Now Playing Bridge</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --fg: #f5f5f5;
+    --muted: #a0a0a0;
+    --accent: #4ade80;
+    --card: #161616;
+    --border: #262626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 80px 24px 120px;
+  }
+  h1 {
+    font-size: 2.6rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .tagline {
+    color: var(--muted);
+    font-size: 1.15rem;
+    margin: 0 0 48px;
+  }
+  h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 48px 0 16px;
+    letter-spacing: -0.01em;
+  }
+  p { margin: 0 0 16px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { padding-left: 20px; margin: 0 0 16px; }
+  li { margin: 4px 0; }
+  code {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.9em;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  pre {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-size: 0.9rem;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  .download {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--accent);
+    color: #0a0a0a;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 14px 24px;
+    border-radius: 10px;
+    margin: 12px 0 8px;
+    transition: transform 0.1s, opacity 0.1s;
+  }
+  .download:hover {
+    text-decoration: none;
+    opacity: 0.92;
+    transform: translateY(-1px);
+  }
+  .download-meta {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 0 0 16px;
+  }
+  .diagram {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: var(--muted);
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 0.85rem;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 16px 0 24px;
+  }
+  .pill {
+    display: inline-block;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-right: 6px;
+  }
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Now Playing Bridge</h1>
+  <p class="tagline">A macOS menu bar app that streams what you're playing — album art, track info, progress — to a USB-connected ESP32-C6 round display.</p>
+
+  <span class="pill">macOS 13+</span>
+  <span class="pill">Apple Silicon &amp; Intel</span>
+  <span class="pill">USB-C</span>
+
+  <h2>Download</h2>
+  <a class="download" href="./NowPlayingBridge.zip">Download Now Playing Bridge.zip</a>
+  <p class="download-meta">~22 MB · ad-hoc signed (Gatekeeper will warn on first launch — right-click the .app and choose Open)</p>
+
+  <h2>How it works</h2>
+  <div class="diagram">┌──────────┐  USB serial   ┌────────────────┐  nowplaying-cli  ┌─────────────┐
+│ ESP32-C6 │ ◄──────────── │  Menu bar app  │ ◄─────────────── │ Apple Music │
+│  display │ ──────────────►│   (Mac side)   │ ────────────────►│  / Spotify  │
+└──────────┘  touch cmds    └────────────────┘  media controls  └─────────────┘</div>
+  <p>The Mac reads now-playing metadata via <code>nowplaying-cli</code>, converts artwork to RGB565, and pushes everything to the ESP32 over USB. Touches on the round display send prev/play-pause/next back to the Mac.</p>
+
+  <h2>Hardware</h2>
+  <ul>
+    <li><a href="https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html">Seeed XIAO ESP32-C6</a></li>
+    <li><a href="https://www.seeedstudio.com/Seeed-Studio-Round-Display-for-XIAO-p-5638.html">Seeed Round Display for XIAO</a> — 240×240 GC9A01A + CHSC6X touch</li>
+    <li>USB-C cable</li>
+  </ul>
+  <p>Firmware lives in the <a href="https://github.com/gxlabs/now-playing/tree/main/firmware">repo</a>; flash with ESP-IDF (<code>idf.py build flash</code>).</p>
+
+  <h2>Setup</h2>
+  <p>The app shells out to <code>nowplaying-cli</code> to read media metadata from macOS. Install it via Homebrew:</p>
+  <pre><code>brew install nowplaying-cli</code></pre>
+  <p>Then drag <strong>Now Playing Bridge.app</strong> to <code>/Applications</code> and launch it. The app auto-detects the ESP32 over USB on every tick — plug the device in any time and it'll just connect.</p>
+
+  <h2>Menu bar</h2>
+  <ul>
+    <li>Circle with a checkmark when connected, cross when not</li>
+    <li>Dropdown shows the USB port path and the current track</li>
+    <li>"Hide" removes the menu bar slot — the bridge keeps running in the background; relaunch the app to bring the icon back</li>
+  </ul>
+
+  <footer>
+    <a href="https://github.com/gxlabs/now-playing">github.com/gxlabs/now-playing</a>
+  </footer>
+</main>
+</body>
+</html>

@@ -1,10 +1,10 @@
 """
-py2app build script for the Now Playing menu bar app.
+py2app build script for the Now Playing Bridge menu bar app.
 
 Build:
     python setup.py py2app
 
-The resulting .app is in dist/Now Playing.app
+The resulting .app is in dist/Now Playing Bridge.app
 """
 from setuptools import setup
 
@@ -19,9 +19,9 @@ OPTIONS = {
     "includes": ["rumps", "serial", "PIL"],
     "packages": ["PIL"],
     "plist": {
-        "CFBundleName": "Now Playing",
-        "CFBundleDisplayName": "Now Playing",
-        "CFBundleIdentifier": "com.glen.nowplaying",
+        "CFBundleName": "Now Playing Bridge",
+        "CFBundleDisplayName": "Now Playing Bridge",
+        "CFBundleIdentifier": "com.glen.nowplayingbridge",
         "CFBundleVersion": "1.0.0",
         "CFBundleShortVersionString": "1.0.0",
         "LSUIElement": True,
@@ -30,7 +30,7 @@ OPTIONS = {
 }
 
 setup(
-    name="Now Playing",
+    name="Now Playing Bridge",
     app=APP,
     data_files=DATA_FILES,
     options={"py2app": OPTIONS},
