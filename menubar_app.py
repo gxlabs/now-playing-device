@@ -86,22 +86,22 @@ def _adapter(*args, timeout=3) -> bytes:
     ).stdout
 
 
-# Anchor elapsed time because MediaRemote only snapshots it at
-# play/pause/seek/track-change. We extrapolate between snapshots.
-_anchor_lock = threading.Lock()
-_anchor = {"id": None, "elapsed": 0.0, "rate": 0.0, "t": 0.0}
-
-
-def _compute_elapsed(reported: float, rate: float, track_id) -> float:
-    now = time.monotonic()
-    with _anchor_lock:
-        if (
-            track_id != _anchor["id"]
-            or abs(reported - _anchor["elapsed"]) > 0.5
-            or rate != _anchor["rate"]
-        ):
-            _anchor.update(id=track_id, elapsed=reported, rate=rate, t=now)
-        return _anchor["elapsed"] + (now - _anchor["t"]) * _anchor["rate"]
+def _live_elapsed(p: dict) -> float:
+    """Extrapolate current elapsed from MediaRemote's snapshot. The daemon
+    only refreshes elapsedTime on play/pause/seek/track-change — during
+    steady playback we have to advance it ourselves using the snapshot's
+    timestamp + playback rate. Without this the device would see a frozen
+    elapsed and continually reset its local interpolation."""
+    snapshot = float(p.get("elapsedTimeMicros", 0)) / 1_000_000.0
+    ts = float(p.get("timestampEpochMicros", 0)) / 1_000_000.0
+    rate = float(p.get("playbackRate") or 0.0)
+    if ts <= 0:
+        return snapshot
+    elapsed = snapshot + (time.time() - ts) * rate
+    duration = float(p.get("durationMicros", 0)) / 1_000_000.0
+    if duration > 0:
+        elapsed = max(0.0, min(duration, elapsed))
+    return elapsed
 
 
 def _payload(with_artwork: bool = False) -> dict:
@@ -123,12 +123,11 @@ def get_info() -> dict:
     if not title:
         return {"playing": False, "trackId": "", "artworkId": ""}
 
-    reported = float(p.get("elapsedTimeMicros", 0)) / 1_000_000.0
     duration = float(p.get("durationMicros", 0)) / 1_000_000.0
     rate = float(p.get("playbackRate") or 0.0)
     uid = p.get("uniqueIdentifier")
     track_id = str(uid) if uid is not None else f"{p.get('artist','')}|{title}"
-    elapsed = _compute_elapsed(reported, rate, track_id)
+    elapsed = _live_elapsed(p)
 
     # `playing` on the wire means "has track loaded" — the firmware uses it
     # to decide whether to show the controls overlay vs the idle screen.
