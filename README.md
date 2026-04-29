@@ -2,9 +2,9 @@
 
 A macOS "now playing" display for the [Seeed XIAO ESP32-C6](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html) paired with the [Seeed Round Display for XIAO](https://www.seeedstudio.com/Seeed-Studio-Round-Display-for-XIAO-p-5638.html). Shows album art, track info, progress, and playback controls on a 240x240 circular TFT — connected over USB.
 
-![The device showing "Money" by Pink Floyd](web/screenshot.jpg)
+![The device showing "Money" by Pink Floyd](screenshot.jpg)
 
-> **This is the source repo.** If you just want to set up the device (download the prebuilt firmware and Mac app), head to **[gxlabs.co/now-playing](https://gxlabs.co/now-playing)**.
+> **This is the source repo.** If you just want to set up the device (download the prebuilt firmware and Mac app), head to **[www.gxlabs.co/now-playing](https://www.gxlabs.co/now-playing)**.
 
 ## How it works
 
