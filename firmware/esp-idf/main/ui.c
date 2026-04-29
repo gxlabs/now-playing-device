@@ -166,7 +166,7 @@ static lv_obj_t *make_btn(lv_obj_t *parent, const char *sym, int sz,
 {
     lv_obj_t *btn = lv_button_create(parent);
     lv_obj_set_size(btn, sz, sz);
-    lv_obj_set_ext_click_area(btn, 20);
+    lv_obj_set_ext_click_area(btn, 10);
     lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(btn, 70, 0);
