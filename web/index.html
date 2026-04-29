@@ -154,11 +154,11 @@
   <a class="download" href="./NowPlayingDisplay.zip">Download NowPlayingDisplay.zip</a>
 
   <h2>How it works</h2>
-  <div class="diagram">┌───────────┐  USB serial    ┌────────────────┐   /usr/bin/perl   ┌──────────────────┐
-│ ESP32-C6  │ ◄────────────  │  Menu bar app  │ ◄───────────────  │ Apple Music      │
-│ + display │ ─────────────► │   (Mac side)   │ ────────────────► │  / Spotify, etc  │
-└───────────┘  touch cmds    └────────────────┘  media controls   └──────────────────┘</div>
-  <p>The Mac reads now-playing metadata via the bundled <a href="https://github.com/ungive/mediaremote-adapter"><code>mediaremote-adapter</code></a> (a Perl shim that loads a small framework into <code>/usr/bin/perl</code>, the only path macOS 15.4+ authorizes for the private MediaRemote API), converts artwork to RGB565, and pushes everything to the ESP32 over USB. Touches on the round display send prev/play-pause/next back to the Mac.</p>
+  <div class="diagram">┌───────────┐  USB serial    ┌────────────────┐  /usr/bin/python3  ┌──────────────────┐
+│ ESP32-C6  │ ◄────────────  │  Menu bar app  │ ◄────────────────  │ Apple Music      │
+│ + display │ ─────────────► │   (Mac side)   │ ─────────────────► │  / Spotify, etc  │
+└───────────┘  touch cmds    └────────────────┘   media controls   └──────────────────┘</div>
+  <p>The Mac reads now-playing metadata via the bundled <a href="https://github.com/ungive/mediaremote-adapter"><code>MediaRemoteAdapter.framework</code></a>, loaded in-process by <code>/usr/bin/python3</code> (a <code>com.apple.*</code>-signed binary — macOS 15.4+ only authorizes the private MediaRemote framework for callers with an Apple bundle id, so the bundled py2app Python can't reach it directly). Artwork is converted to RGB565 and pushed to the ESP32 over USB; touches on the round display send prev/play-pause/next back to the Mac.</p>
 
   <h2>Hardware</h2>
   <ul>

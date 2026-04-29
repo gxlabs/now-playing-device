@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """macOS menu bar app that bridges now-playing data to the ESP32 display.
 
-Reads now-playing state via the bundled mediaremote-adapter (Perl shim +
-MediaRemoteAdapter.framework, since macOS 15.4+ only authorizes the private
-MediaRemote framework for processes whose code signature reports a
-`com.apple.*` bundle id — `/usr/bin/perl` is `com.apple.perl`). Auto-detects
-the ESP32 over USB, pushes JSON state + RGB565 artwork, and forwards touch
-commands back as media controls.
+Reads now-playing state via the bundled MediaRemoteAdapter.framework, loaded
+in-process by `/usr/bin/python3` (a `com.apple.*`-signed binary — macOS 15.4+
+only authorizes the private MediaRemote framework for callers with that
+bundle id, so the bundled py2app Python can't talk to it directly). Auto-
+detects the ESP32 over USB, pushes JSON state + RGB565 artwork, and forwards
+touch commands back as media controls.
 """
 import base64
 import glob
+import inspect
 import io
 import json
 import os
@@ -26,7 +27,7 @@ import serial
 from PIL import Image, ImageDraw
 
 ART_SIZE = 240
-PERL = "/usr/bin/perl"
+PYTHON = "/usr/bin/python3"
 
 # ── Now-playing adapter ───────────────────────────────────────────
 
@@ -39,17 +40,49 @@ for _b in (Path(_RP) if _RP else None, _HERE):
 else:
     raise RuntimeError("vendor/mediaremote-adapter not found")
 
-PERL_SCRIPT = str(_ADAPTER / "bin" / "mediaremote-adapter.pl")
 FRAMEWORK = str(_ADAPTER / "Frameworks" / "MediaRemoteAdapter.framework")
+
+
+def _adapter_helper():
+    """Loaded into /usr/bin/python3 via inspect.getsource + `-c` (the bundled
+    py2app Python isn't `com.apple.*`-signed so its MediaRemote reads come
+    back empty). Receives args via sys.argv: FRAMEWORK_PATH OP [params...]."""
+    import ctypes, os, sys
+    fw = sys.argv[1]
+    op = sys.argv[2]
+    lib = ctypes.CDLL(fw + "/" + os.path.basename(fw).removesuffix(".framework"))
+    if op == "get":
+        for o in sys.argv[3:]:
+            if o.startswith("--"):
+                k, _, v = o[2:].partition("=")
+                os.environ["MEDIAREMOTEADAPTER_OPTION_" + k.replace("-", "_")] = v
+        lib.adapter_get_env()
+    elif op == "send":
+        lib.adapter_send.argtypes = [ctypes.c_int]
+        lib.adapter_send(int(sys.argv[3]))
+    elif op == "seek":
+        lib.adapter_seek.argtypes = [ctypes.c_long]
+        lib.adapter_seek(int(sys.argv[3]))
+
+
+_HELPER_SRC = inspect.getsource(_adapter_helper) + f"\n{_adapter_helper.__name__}()\n"
 
 # MRMediaRemoteCommand enum values
 COMMANDS = {"play": 0, "pause": 1, "toggle": 2, "next": 4, "previous": 5}
 
 
+# py2app sets PYTHONHOME/PYTHONPATH/DYLD_FRAMEWORK_PATH on its bundled Python;
+# inheriting them into /usr/bin/python3 breaks its stdlib lookup. Strip them.
+_CLEAN_ENV = {
+    k: v for k, v in os.environ.items()
+    if not k.startswith(("PYTHON", "DYLD_", "_PYI_"))
+}
+
+
 def _adapter(*args, timeout=3) -> bytes:
     return subprocess.run(
-        [PERL, PERL_SCRIPT, FRAMEWORK, *args],
-        capture_output=True, timeout=timeout,
+        [PYTHON, "-c", _HELPER_SRC, FRAMEWORK, *args],
+        capture_output=True, timeout=timeout, env=_CLEAN_ENV,
     ).stdout
 
 

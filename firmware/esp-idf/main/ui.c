@@ -59,6 +59,11 @@ static bool s_dimmed;
 static char s_prev_track_id[64];
 static bool s_prev_was_playing;
 
+/* Server presence: if we don't receive a state frame for a while, the Mac-side
+   app isn't running. Revert to the setup QR so the user knows. */
+#define DISCONNECT_TIMEOUT_MS 8000
+static uint32_t s_last_state_ms;
+
 /* ── Helpers ──────────────────────────────────────────────────── */
 
 static void fmt_time(char *buf, int size, float secs)
@@ -90,6 +95,21 @@ static void idle_check_cb(lv_timer_t *t)
     if ((int32_t)(now - s_last_activity_ms) > IDLE_TIMEOUT_MS) {
         s_dimmed = true;
         display_set_backlight(BL_DIM);
+    }
+}
+
+/* ── Disconnect watchdog ──────────────────────────────────────────
+   Mac pushes state every second; an 8s gap means the app isn't running. */
+
+static void disconnect_check_cb(lv_timer_t *t)
+{
+    if (!s_connected) return;
+    uint32_t now = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    if ((int32_t)(now - s_last_state_ms) > DISCONNECT_TIMEOUT_MS) {
+        s_connected = false;
+        s_has_data = false;
+        lv_obj_remove_flag(setup_screen, LV_OBJ_FLAG_HIDDEN);
+        ESP_LOGI(TAG, "disconnected — showing setup QR");
     }
 }
 
@@ -326,6 +346,7 @@ void ui_init(void)
 
     s_last_activity_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     lv_timer_create(idle_check_cb, 1000, NULL);
+    lv_timer_create(disconnect_check_cb, 1000, NULL);
 
     lvgl_port_unlock();
     ESP_LOGI(TAG, "UI ready (showing setup QR)");
@@ -336,7 +357,9 @@ void ui_update_from_state(const np_state_t *state, const uint8_t *art_pixels,
 {
     if (!lvgl_port_lock(pdMS_TO_TICKS(200))) return;
 
-    /* First data received — dismiss setup screen forever */
+    s_last_state_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+
+    /* First data received (or reconnect after a disconnect) — dismiss QR */
     if (!s_connected) {
         s_connected = true;
         lv_obj_add_flag(setup_screen, LV_OBJ_FLAG_HIDDEN);

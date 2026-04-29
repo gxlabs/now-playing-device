@@ -35,6 +35,14 @@ OPTIONS = {
     "argv_emulation": False,
     "includes": ["rumps", "serial", "PIL"],
     "packages": ["PIL"],
+    # Trim ~14 MB of stdlib + tooling we don't use at runtime. SSL/hashlib are
+    # only pulled in by network code; this app talks to a local USB serial
+    # device + an in-process framework, so neither is reachable.
+    "excludes": [
+        "setuptools", "pip", "wheel",
+        "ssl", "_ssl", "hashlib", "_hashlib",
+        "test", "unittest", "tkinter",
+    ],
     "plist": {
         "CFBundleName": "NowPlayingDisplay",
         "CFBundleDisplayName": "NowPlayingDisplay",

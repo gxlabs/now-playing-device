@@ -9,13 +9,13 @@ A macOS "now playing" display for the Seeed XIAO ESP32-C6 round screen. Shows al
 ## How it works
 
 ```
-┌───────────┐  USB serial    ┌────────────────┐   /usr/bin/perl   ┌──────────────────┐
-│ ESP32-C6  │ ◄────────────  │  Menu bar app  │ ◄───────────────  │ Apple Music      │
-│ + display │ ─────────────► │   (Mac side)   │ ────────────────► │  / Spotify, etc  │
-└───────────┘  touch cmds    └────────────────┘  media controls   └──────────────────┘
+┌───────────┐  USB serial    ┌────────────────┐  /usr/bin/python3  ┌──────────────────┐
+│ ESP32-C6  │ ◄────────────  │  Menu bar app  │ ◄────────────────  │ Apple Music      │
+│ + display │ ─────────────► │   (Mac side)   │ ─────────────────► │  / Spotify, etc  │
+└───────────┘  touch cmds    └────────────────┘  media controls    └──────────────────┘
 ```
 
-The Mac reads now-playing metadata via the bundled [`mediaremote-adapter`](https://github.com/ungive/mediaremote-adapter) (a Perl shim that loads a small framework into `/usr/bin/perl`, the only path macOS 15.4+ authorizes for the private MediaRemote API), converts artwork to RGB565, and pushes everything to the ESP32 over USB serial. Touch input on the display sends prev/toggle/next commands back.
+The Mac reads now-playing metadata via the bundled [`MediaRemoteAdapter.framework`](https://github.com/ungive/mediaremote-adapter), loaded in-process by `/usr/bin/python3` (a `com.apple.*`-signed binary — macOS 15.4+ only authorizes the private MediaRemote framework for callers with an Apple bundle id, so the bundled py2app Python can't reach it directly). Artwork is converted to RGB565 and pushed to the ESP32 over USB serial; touch input on the display sends prev/toggle/next commands back.
 
 ## Hardware
 
@@ -24,7 +24,7 @@ The Mac reads now-playing metadata via the bundled [`mediaremote-adapter`](https
 
 ## Building the menu bar app
 
-Produces a self-contained `NowPlayingDisplay.app` with the vendored MediaRemote adapter framework + `/usr/bin/perl` shim — no Homebrew or external CLI required at runtime.
+Produces a self-contained `NowPlayingDisplay.app` with the vendored `MediaRemoteAdapter.framework` — driven via `/usr/bin/python3` and `ctypes`. No Homebrew or external CLI required at runtime.
 
 ```bash
 python3 -m venv .venv
@@ -83,8 +83,7 @@ On first boot the display shows a QR code. Once the Mac-side app connects, it sw
 git clone --depth 1 --branch vX.Y.Z https://github.com/ungive/mediaremote-adapter.git /tmp/mra
 cd /tmp/mra && mkdir build && cd build && cmake .. && cmake --build .
 cp -R MediaRemoteAdapter.framework <repo>/vendor/mediaremote-adapter/Frameworks/
-cp ../bin/mediaremote-adapter.pl    <repo>/vendor/mediaremote-adapter/bin/
-cp ../LICENSE                       <repo>/vendor/mediaremote-adapter/LICENSE
+cp ../LICENSE                      <repo>/vendor/mediaremote-adapter/LICENSE
 echo "$(git rev-parse HEAD)\n$(git describe --tags)" > <repo>/vendor/mediaremote-adapter/VERSION
 ```
 
