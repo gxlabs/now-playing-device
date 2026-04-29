@@ -267,7 +267,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 8);
     lv_label_set_text(title_label, "");
     lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(title_label, LV_LABEL_LONG_SCROLL);
 
@@ -277,7 +277,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_align(artist_label, LV_ALIGN_TOP_MID, 0, 32);
     lv_label_set_text(artist_label, "");
     lv_obj_set_style_text_color(artist_label, lv_color_make(200, 200, 200), 0);
-    lv_obj_set_style_text_font(artist_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(artist_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(artist_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(artist_label, LV_LABEL_LONG_SCROLL);
 
@@ -289,7 +289,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_align(elapsed_label, LV_ALIGN_TOP_LEFT, 20, 52);
     lv_label_set_text(elapsed_label, "0:00");
     lv_obj_set_style_text_color(elapsed_label, lv_color_make(180, 180, 180), 0);
-    lv_obj_set_style_text_font(elapsed_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(elapsed_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_align(elapsed_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     progress_bar = lv_bar_create(overlay);
@@ -309,7 +309,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_align(remaining_label, LV_ALIGN_TOP_LEFT, 182, 52);
     lv_label_set_text(remaining_label, "-0:00");
     lv_obj_set_style_text_color(remaining_label, lv_color_make(180, 180, 180), 0);
-    lv_obj_set_style_text_font(remaining_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(remaining_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_align(remaining_label, LV_TEXT_ALIGN_LEFT, 0);
 
     /* Control buttons — large, well-spaced */
