@@ -12,7 +12,7 @@
 static const char *TAG = "ui";
 
 #define S 240   /* screen size */
-#define SETUP_URL "https://static.gxlabs.co/now-playing"
+#define SETUP_URL "https://gxlabs.co/now-playing"
 
 /* ── Widgets ──────────────────────────────────────────────────── */
 
@@ -203,7 +203,7 @@ static void create_setup_screen(lv_obj_t *scr)
 
     /* Title */
     lv_obj_t *lbl = lv_label_create(setup_screen);
-    lv_label_set_text(lbl, "Now Playing");
+    lv_label_set_text(lbl, "Setup");
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
     lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, 30);
@@ -218,7 +218,7 @@ static void create_setup_screen(lv_obj_t *scr)
 
     /* URL caption directly under the QR */
     lv_obj_t *url = lv_label_create(setup_screen);
-    lv_label_set_text(url, "static.gxlabs.co/now-playing");
+    lv_label_set_text(url, "gxlabs.co/now-playing");
     lv_obj_set_style_text_color(url, lv_color_make(180, 180, 180), 0);
     lv_obj_set_style_text_font(url, &lv_font_montserrat_12, 0);
     lv_obj_align(url, LV_ALIGN_BOTTOM_MID, 0, -55);
