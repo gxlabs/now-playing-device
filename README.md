@@ -2,9 +2,7 @@
 
 A macOS "now playing" display for the Seeed XIAO ESP32-C6 round screen. Shows album art, track info, progress, and playback controls on a 240x240 circular TFT — connected over USB.
 
-<p align="center">
-  <img src="web/screenshot.jpg" alt="The device showing &quot;Electric Relaxation&quot; by A Tribe Called Quest" width="380">
-</p>
+![The device showing "Money" by Pink Floyd](web/screenshot.jpg)
 
 ## How it works
 
