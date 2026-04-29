@@ -98,11 +98,23 @@ void ui_mark_alive(void)
 
 static void disconnect_check_cb(lv_timer_t *t)
 {
-    if (!s_connected) return;
     uint32_t now = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
-    if ((int32_t)(now - s_last_state_ms) > DISCONNECT_TIMEOUT_MS) {
+    bool alive = s_last_state_ms != 0 &&
+                 (int32_t)(now - s_last_state_ms) <= DISCONNECT_TIMEOUT_MS;
+
+    if (alive && !s_connected) {
+        /* Heartbeat arrived before any state — hide setup so the screen reads
+           as "connected, nothing playing" until real state lands. */
+        s_connected = true;
+        lv_obj_add_flag(setup_screen, LV_OBJ_FLAG_HIDDEN);
+        if (!s_has_data) {
+            lv_obj_remove_flag(idle_label, LV_OBJ_FLAG_HIDDEN);
+        }
+        ESP_LOGI(TAG, "connected (heartbeat) — hiding setup QR");
+    } else if (!alive && s_connected) {
         s_connected = false;
         s_has_data = false;
+        lv_obj_add_flag(idle_label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(setup_screen, LV_OBJ_FLAG_HIDDEN);
         ESP_LOGI(TAG, "disconnected — showing setup QR");
     }

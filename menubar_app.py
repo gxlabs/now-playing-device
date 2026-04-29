@@ -22,8 +22,10 @@ import time
 from pathlib import Path
 
 import AppKit
+import objc
 import rumps
 import serial
+from Foundation import NSBundle
 from PIL import Image, ImageDraw
 
 ART_SIZE = 240
@@ -164,6 +166,47 @@ def send_command(action: str) -> bool:
     return True
 
 
+# ── Launch at login (SMAppService.mainApp, macOS 13+) ────────────
+
+# Loaded dynamically rather than as a build-time dep — avoids pulling
+# pyobjc-framework-ServiceManagement into the bundled py2app wheel set.
+try:
+    _sm_bundle = NSBundle.bundleWithPath_(
+        "/System/Library/Frameworks/ServiceManagement.framework"
+    )
+    if _sm_bundle and _sm_bundle.load():
+        SMAppService = objc.lookUpClass("SMAppService")
+    else:
+        SMAppService = None
+except Exception:
+    SMAppService = None
+
+SM_STATUS_ENABLED = 1  # SMAppServiceStatusEnabled
+
+
+def _login_service():
+    return SMAppService.mainAppService() if SMAppService else None
+
+
+def login_enabled() -> bool:
+    svc = _login_service()
+    return svc is not None and svc.status() == SM_STATUS_ENABLED
+
+
+def set_login_enabled(enabled: bool) -> bool:
+    svc = _login_service()
+    if svc is None:
+        return False
+    try:
+        if enabled:
+            ok, _err = svc.registerAndReturnError_(None)
+        else:
+            ok, _err = svc.unregisterAndReturnError_(None)
+        return bool(ok)
+    except Exception:
+        return False
+
+
 # ── Menu bar icon (circle with check or cross) ────────────────────
 
 def _make_icon(connected: bool) -> str:
@@ -291,14 +334,22 @@ class NowPlayingBridge(rumps.App):
         self._port_item = rumps.MenuItem("No device")
         self._track_item = rumps.MenuItem("Nothing playing")
         self._hide_item = rumps.MenuItem("Hide", callback=self._hide_icon)
-        self.menu = [
+        menu = [
             self._port_item,
             None,
             self._track_item,
             None,
-            self._hide_item,
-            None,
         ]
+        if SMAppService is not None:
+            self._login_item = rumps.MenuItem(
+                "Launch at login", callback=self._toggle_login
+            )
+            self._login_item.state = login_enabled()
+            menu += [self._login_item, None]
+        else:
+            self._login_item = None
+        menu += [self._hide_item, None]
+        self.menu = menu
         self._hidden_icon = self._make_blank_icon()
         self._real_icon_connected = get_icon(True)
         self._real_icon_disconnected = get_icon(False)
@@ -312,6 +363,10 @@ class NowPlayingBridge(rumps.App):
         path = tempfile.mktemp(suffix=".png")
         img.save(path)
         return path
+
+    def _toggle_login(self, sender):
+        set_login_enabled(not bool(sender.state))
+        sender.state = login_enabled()
 
     def _hide_icon(self, _):
         # Remove the NSStatusItem entirely so the menu bar slot disappears.
