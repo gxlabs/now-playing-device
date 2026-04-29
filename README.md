@@ -1,4 +1,4 @@
-# Now Playing
+# Now Playing Device
 
 A macOS "now playing" display for the Seeed XIAO ESP32-C6 round screen. Shows album art, track info, progress, and playback controls on a 240x240 circular TFT — connected over USB.
 
@@ -55,15 +55,25 @@ codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$SI
 codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$SIGN" "$APP/Contents/MacOS/NowPlayingDisplay"
 codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$SIGN" "$APP"
 
-# notarize + staple
-ditto -c -k --keepParent "$APP" "dist/NowPlayingDisplay.zip"
-xcrun notarytool submit "dist/NowPlayingDisplay.zip" --keychain-profile "your-profile" --wait
-xcrun stapler staple "$APP"
+# package as a signed/notarized .dmg with drag-to-Applications layout
+DMG="dist/NowPlayingDisplay.dmg"
+create-dmg \
+  --volname "NowPlayingDisplay" \
+  --window-size 600 350 \
+  --icon-size 100 \
+  --icon "NowPlayingDisplay.app" 150 200 \
+  --app-drop-link 450 200 \
+  --no-internet-enable \
+  "$DMG" "$APP"
+
+codesign --force --sign "$SIGN" "$DMG"
+xcrun notarytool submit "$DMG" --keychain-profile "your-profile" --wait
+xcrun stapler staple "$DMG"
 ```
 
 `entitlements.plist` (already in repo) grants the hardened runtime exceptions Python needs (`disable-library-validation`, `allow-unsigned-executable-memory`).
 
-Drop `dist/NowPlayingDisplay.app` into `/Applications` and launch it. Auto-detects the ESP32 via USB handshake and reconnects if unplugged/replugged.
+Open `dist/NowPlayingDisplay.dmg`, drag `NowPlayingDisplay.app` to `/Applications`, and launch it. Auto-detects the ESP32 via USB handshake and reconnects if unplugged/replugged.
 
 ## Firmware
 
