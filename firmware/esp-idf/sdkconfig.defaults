@@ -10,12 +10,11 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
-# LVGL fonts
-CONFIG_LV_FONT_MONTSERRAT_12=y
+# LVGL: disable built-in Montserrat fonts (ASCII-only). We ship custom
+# montserrat_ext_* in main/fonts/ that cover Latin-1 Supplement +
+# Extended-A, so accented track/artist names render. Keep _14 enabled
+# only because LVGL needs a built-in default font.
 CONFIG_LV_FONT_MONTSERRAT_14=y
-CONFIG_LV_FONT_MONTSERRAT_16=y
-CONFIG_LV_FONT_MONTSERRAT_18=y
-CONFIG_LV_FONT_MONTSERRAT_20=y
 
 # LVGL QR code
 CONFIG_LV_USE_QRCODE=y

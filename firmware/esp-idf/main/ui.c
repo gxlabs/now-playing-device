@@ -14,6 +14,12 @@ static const char *TAG = "ui";
 #define S 240   /* screen size */
 #define SETUP_URL "https://www.gxlabs.co/now-playing"
 
+LV_FONT_DECLARE(montserrat_ext_12);
+LV_FONT_DECLARE(montserrat_ext_14);
+LV_FONT_DECLARE(montserrat_ext_16);
+LV_FONT_DECLARE(montserrat_ext_18);
+LV_FONT_DECLARE(montserrat_ext_20);
+
 /* ── Widgets ──────────────────────────────────────────────────── */
 
 /* Setup screen (shown until first data arrives) */
@@ -195,7 +201,7 @@ static lv_obj_t *make_btn(lv_obj_t *parent, const char *sym, int sz,
     lv_obj_t *lbl = lv_label_create(btn);
     lv_label_set_text(lbl, sym);
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(lbl, &montserrat_ext_20, 0);
     lv_obj_center(lbl);
     return btn;
 }
@@ -217,7 +223,7 @@ static void create_setup_screen(lv_obj_t *scr)
     lv_obj_t *lbl = lv_label_create(setup_screen);
     lv_label_set_text(lbl, "Setup");
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(lbl, &montserrat_ext_20, 0);
     lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, 30);
 
     /* QR code */
@@ -232,7 +238,7 @@ static void create_setup_screen(lv_obj_t *scr)
     lv_obj_t *url = lv_label_create(setup_screen);
     lv_label_set_text(url, "www.gxlabs.co/now-playing");
     lv_obj_set_style_text_color(url, lv_color_make(180, 180, 180), 0);
-    lv_obj_set_style_text_font(url, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(url, &montserrat_ext_12, 0);
     lv_obj_align(url, LV_ALIGN_BOTTOM_MID, 0, -55);
 }
 
@@ -279,7 +285,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 8);
     lv_label_set_text(title_label, "");
     lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_font(title_label, &montserrat_ext_18, 0);
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(title_label, LV_LABEL_LONG_SCROLL);
 
@@ -289,7 +295,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_align(artist_label, LV_ALIGN_TOP_MID, 0, 32);
     lv_label_set_text(artist_label, "");
     lv_obj_set_style_text_color(artist_label, lv_color_make(200, 200, 200), 0);
-    lv_obj_set_style_text_font(artist_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(artist_label, &montserrat_ext_16, 0);
     lv_obj_set_style_text_align(artist_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(artist_label, LV_LABEL_LONG_SCROLL);
 
@@ -301,7 +307,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_align(elapsed_label, LV_ALIGN_TOP_LEFT, 20, 52);
     lv_label_set_text(elapsed_label, "0:00");
     lv_obj_set_style_text_color(elapsed_label, lv_color_make(180, 180, 180), 0);
-    lv_obj_set_style_text_font(elapsed_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(elapsed_label, &montserrat_ext_14, 0);
     lv_obj_set_style_text_align(elapsed_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     progress_bar = lv_bar_create(overlay);
@@ -321,7 +327,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_align(remaining_label, LV_ALIGN_TOP_LEFT, 182, 52);
     lv_label_set_text(remaining_label, "-0:00");
     lv_obj_set_style_text_color(remaining_label, lv_color_make(180, 180, 180), 0);
-    lv_obj_set_style_text_font(remaining_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(remaining_label, &montserrat_ext_14, 0);
     lv_obj_set_style_text_align(remaining_label, LV_TEXT_ALIGN_LEFT, 0);
 
     /* Control buttons — large, well-spaced */
@@ -340,7 +346,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_center(idle_label);
     lv_label_set_text(idle_label, "Nothing playing");
     lv_obj_set_style_text_color(idle_label, lv_color_make(120, 120, 120), 0);
-    lv_obj_set_style_text_font(idle_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(idle_label, &montserrat_ext_16, 0);
     lv_obj_add_flag(idle_label, LV_OBJ_FLAG_HIDDEN);
 }
 
