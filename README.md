@@ -108,3 +108,7 @@ The Mac and ESP32 communicate over USB serial with a simple binary protocol:
 | Mac → ESP | `0x02` + 4-byte BE length | RGB565 artwork (240×240) |
 | Mac → ESP | `0x03` | Heartbeat (separate from state, sent every 1s so a stalled MediaRemote query doesn't trigger the disconnect watchdog) |
 | ESP → Mac | `CMD:<action>\n` | Touch command (toggle/next/previous) |
+
+## Buy me a coffee
+
+If this project saved you some time or made your desk a little nicer, you can support further work at [buymeacoffee.com/glenrobertson](https://buymeacoffee.com/glenrobertson).
