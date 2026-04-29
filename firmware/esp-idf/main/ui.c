@@ -64,17 +64,6 @@ static bool s_prev_was_playing;
 #define DISCONNECT_TIMEOUT_MS 8000
 static uint32_t s_last_state_ms;
 
-/* ── Helpers ──────────────────────────────────────────────────── */
-
-static void fmt_time(char *buf, int size, float secs)
-{
-    if (secs < 0) secs = 0;
-    int s = (int)secs;
-    int m = s / 60;
-    s %= 60;
-    snprintf(buf, size, "%d:%02d", m, s);
-}
-
 /* ── Idle dim ─────────────────────────────────────────────────── */
 
 bool ui_mark_activity(void)
@@ -127,13 +116,19 @@ static void progress_timer_cb(lv_timer_t *t)
 
     lv_bar_set_value(progress_bar, (int)(e / s_duration * 1000.0f), LV_ANIM_OFF);
 
+    /* Floor both labels off the same integer second so they flip together,
+       regardless of duration's fractional part. */
+    int e_int = (int)e;
+    int dur_int = (int)s_duration;
+    int rem_int = dur_int - e_int;
+    if (rem_int < 0) rem_int = 0;
+
     char buf[16];
-    fmt_time(buf, sizeof(buf), e);
+    snprintf(buf, sizeof(buf), "%d:%02d", e_int / 60, e_int % 60);
     lv_label_set_text(elapsed_label, buf);
 
     char rbuf[16];
-    rbuf[0] = '-';
-    fmt_time(rbuf + 1, sizeof(rbuf) - 1, s_duration - e);
+    snprintf(rbuf, sizeof(rbuf), "-%d:%02d", rem_int / 60, rem_int % 60);
     lv_label_set_text(remaining_label, rbuf);
 }
 
