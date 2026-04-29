@@ -46,7 +46,7 @@ OPTIONS = {
     "plist": {
         "CFBundleName": "NowPlayingDisplay",
         "CFBundleDisplayName": "NowPlayingDisplay",
-        "CFBundleIdentifier": "com.gxlabs.nowplayingdisplay",
+        "CFBundleIdentifier": "co.gxlabs.nowplayingdisplay",
         "CFBundleVersion": "1.0.0",
         "CFBundleShortVersionString": "1.0.0",
         "LSUIElement": True,
