@@ -87,6 +87,11 @@ static void serial_task(void *arg)
             usb_serial_jtag_write_bytes((const uint8_t *)ack, 7, pdMS_TO_TICKS(100));
             continue;
 
+        } else if (hdr == 0x03) {
+            /* Heartbeat — Mac is alive even if it has nothing to send */
+            ui_mark_alive();
+            continue;
+
         } else if (hdr == 0x01) {
             /* State: 2-byte BE length + JSON */
             uint8_t lb[2];

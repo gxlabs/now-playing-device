@@ -226,13 +226,20 @@ def jpeg_to_rgb565(jpeg_bytes: bytes) -> bytes:
     return bytes(out)
 
 
-def send_state(port, info):
+def send_state(port, info, lock):
     data = json.dumps(info, separators=(",", ":")).encode()
-    port.write(b"\x01" + struct.pack(">H", len(data)) + data)
+    with lock:
+        port.write(b"\x01" + struct.pack(">H", len(data)) + data)
 
 
-def send_artwork(port, rgb565):
-    port.write(b"\x02" + struct.pack(">I", len(rgb565)) + rgb565)
+def send_artwork(port, rgb565, lock):
+    with lock:
+        port.write(b"\x02" + struct.pack(">I", len(rgb565)) + rgb565)
+
+
+def send_heartbeat(port, lock):
+    with lock:
+        port.write(b"\x03")
 
 
 def find_device():
@@ -276,7 +283,9 @@ class NowPlayingBridge(rumps.App):
         super().__init__("", icon=get_icon(False), quit_button="Quit")
         self.port = None
         self.port_path = None
+        self.port_lock = threading.Lock()
         self.reader_thread = None
+        self.heartbeat_thread = None
         self.last_art_id = ""
         self._was_connected = False
         self._port_item = rumps.MenuItem("No device")
@@ -348,14 +357,14 @@ class NowPlayingBridge(rumps.App):
 
         # Send to device
         try:
-            send_state(self.port, info)
+            send_state(self.port, info, self.port_lock)
 
             art_id = info.get("artworkId", "")
             if art_id and art_id != self.last_art_id:
                 jpeg = get_artwork_bytes()
                 if jpeg:
                     rgb565 = jpeg_to_rgb565(jpeg)
-                    send_artwork(self.port, rgb565)
+                    send_artwork(self.port, rgb565, self.port_lock)
                 self.last_art_id = art_id
         except Exception:
             self.port = None
@@ -373,9 +382,25 @@ class NowPlayingBridge(rumps.App):
                 target=read_commands, args=(self.port,), daemon=True
             )
             self.reader_thread.start()
+            self.heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop, daemon=True
+            )
+            self.heartbeat_thread.start()
         except Exception:
             self.port = None
             self.port_path = None
+
+    def _heartbeat_loop(self):
+        # Independent of the main tick — keeps the device's disconnect
+        # watchdog quiet even when MediaRemote queries stall and tick
+        # falls behind.
+        port = self.port
+        while port is self.port and port is not None and port.is_open:
+            try:
+                send_heartbeat(port, self.port_lock)
+            except Exception:
+                return
+            time.sleep(1.0)
 
 
 if __name__ == "__main__":

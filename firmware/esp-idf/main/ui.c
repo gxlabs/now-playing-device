@@ -88,7 +88,13 @@ static void idle_check_cb(lv_timer_t *t)
 }
 
 /* ── Disconnect watchdog ──────────────────────────────────────────
-   Mac pushes state every second; an 8s gap means the app isn't running. */
+   Mac sends a 0x03 heartbeat every second (independent of MediaRemote
+   queries, which can stall); an 8s gap means the app isn't running. */
+
+void ui_mark_alive(void)
+{
+    s_last_state_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+}
 
 static void disconnect_check_cb(lv_timer_t *t)
 {
