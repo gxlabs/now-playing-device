@@ -23,7 +23,7 @@
     -webkit-font-smoothing: antialiased;
   }
   main {
-    max-width: 720px;
+    max-width: 800px;
     margin: 0 auto;
     padding: 80px 24px 120px;
   }
@@ -141,7 +141,7 @@
 </head>
 <body>
 <main>
-  <h1>Now Playing Bridge</h1>
+  <h1>Now Playing Display</h1>
   <p class="tagline">A macOS menu bar app that streams what you're playing — album art, track info, progress — to a USB-connected ESP32-C6 round display.</p>
 
   <img class="hero" src="screenshot.jpg" alt="The device showing &quot;Electric Relaxation&quot; by A Tribe Called Quest">
@@ -151,17 +151,14 @@
   <span class="pill">USB-C</span>
 
   <h2>Download</h2>
-  <p class="callout"><strong>Before you launch:</strong> install the <code>nowplaying-cli</code> Homebrew package — the app shells out to it to read media metadata from macOS. macOS only authorizes that binary at its installed Homebrew path, so it can't be bundled inside the .app.</p>
-  <pre><code>brew install nowplaying-cli</code></pre>
-  <a class="download" href="./NowPlayingBridge.zip">Download Now Playing Bridge.zip</a>
-  <p class="download-meta">~22 MB · ad-hoc signed (Gatekeeper will warn on first launch — right-click the .app and choose Open)</p>
+  <a class="download" href="./NowPlayingDisplay.zip">Download NowPlayingDisplay.zip</a>
 
   <h2>How it works</h2>
-  <div class="diagram">┌──────────┐  USB serial   ┌────────────────┐  nowplaying-cli  ┌─────────────┐
-│ ESP32-C6 │ ◄──────────── │  Menu bar app  │ ◄─────────────── │ Apple Music │
-│  display │ ──────────────►│   (Mac side)   │ ────────────────►│  / Spotify  │
-└──────────┘  touch cmds    └────────────────┘  media controls  └─────────────┘</div>
-  <p>The Mac reads now-playing metadata via <code>nowplaying-cli</code>, converts artwork to RGB565, and pushes everything to the ESP32 over USB. Touches on the round display send prev/play-pause/next back to the Mac.</p>
+  <div class="diagram">┌───────────┐  USB serial    ┌────────────────┐   /usr/bin/perl   ┌──────────────────┐
+│ ESP32-C6  │ ◄────────────  │  Menu bar app  │ ◄───────────────  │ Apple Music      │
+│ + display │ ─────────────► │   (Mac side)   │ ────────────────► │  / Spotify, etc  │
+└───────────┘  touch cmds    └────────────────┘  media controls   └──────────────────┘</div>
+  <p>The Mac reads now-playing metadata via the bundled <a href="https://github.com/ungive/mediaremote-adapter"><code>mediaremote-adapter</code></a> (a Perl shim that loads a small framework into <code>/usr/bin/perl</code>, the only path macOS 15.4+ authorizes for the private MediaRemote API), converts artwork to RGB565, and pushes everything to the ESP32 over USB. Touches on the round display send prev/play-pause/next back to the Mac.</p>
 
   <h2>Hardware</h2>
   <ul>
@@ -172,7 +169,7 @@
   <p>Firmware is built from the <code>firmware/</code> tree using ESP-IDF (<code>idf.py build flash</code>).</p>
 
   <h2>Setup</h2>
-  <p>Drag <strong>Now Playing Bridge.app</strong> to <code>/Applications</code> and launch it. The app auto-detects the ESP32 over USB on every tick — plug the device in any time and it'll just connect.</p>
+  <p>Drag <strong>NowPlayingDisplay.app</strong> to <code>/Applications</code> and launch it. The app auto-detects the ESP32 over USB on every tick — plug the device in any time and it'll just connect.</p>
 
   <h2>Menu bar</h2>
   <ul>

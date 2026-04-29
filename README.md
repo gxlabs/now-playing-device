@@ -9,33 +9,63 @@ A macOS "now playing" display for the Seeed XIAO ESP32-C6 round screen. Shows al
 ## How it works
 
 ```
-┌──────────┐  USB serial   ┌────────────────┐  nowplaying-cli  ┌─────────────┐
-│ ESP32-C6 │ ◄──────────── │  Menu bar app  │ ◄─────────────── │ Apple Music │
-│  display │ ──────────────►│   (Mac side)   │ ────────────────►│  / Spotify  │
-└──────────┘  touch cmds    └────────────────┘  media controls  └─────────────┘
+┌───────────┐  USB serial    ┌────────────────┐   /usr/bin/perl   ┌──────────────────┐
+│ ESP32-C6  │ ◄────────────  │  Menu bar app  │ ◄───────────────  │ Apple Music      │
+│ + display │ ─────────────► │   (Mac side)   │ ────────────────► │  / Spotify, etc  │
+└───────────┘  touch cmds    └────────────────┘  media controls   └──────────────────┘
 ```
 
-The Mac reads now-playing metadata via `nowplaying-cli`, converts artwork to RGB565, and pushes everything to the ESP32 over USB serial. Touch input on the display sends prev/toggle/next commands back.
+The Mac reads now-playing metadata via the bundled [`mediaremote-adapter`](https://github.com/ungive/mediaremote-adapter) (a Perl shim that loads a small framework into `/usr/bin/perl`, the only path macOS 15.4+ authorizes for the private MediaRemote API), converts artwork to RGB565, and pushes everything to the ESP32 over USB serial. Touch input on the display sends prev/toggle/next commands back.
 
 ## Hardware
 
 - [Seeed XIAO ESP32-C6](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html)
 - [Seeed Round Display for XIAO](https://www.seeedstudio.com/Seeed-Studio-Round-Display-for-XIAO-p-5638.html) (GC9A01A 240x240 + CHSC6X touch)
 
-## Setup
+## Building the menu bar app
 
-### Mac
-
-> **Required dependency:** the bridge shells out to [`nowplaying-cli`](https://github.com/kirtan-shah/nowplaying-cli) to read media metadata from macOS. macOS gates `MediaRemote.framework` access by binary path/identity, so a copy at any other location returns empty data — meaning `nowplaying-cli` **must be installed via Homebrew at its default location** and can't be bundled into the .app.
+Produces a self-contained `NowPlayingDisplay.app` with the vendored MediaRemote adapter framework + `/usr/bin/perl` shim — no Homebrew or external CLI required at runtime.
 
 ```bash
-brew bundle                # installs nowplaying-cli + python
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt py2app
+python setup.py py2app
+
+# sign nested code (depth-first), then frameworks, then main app
+SIGN="Developer ID Application: YOUR NAME (TEAMID)"
+APP="dist/NowPlayingDisplay.app"
+ENT="entitlements.plist"
+
+find "$APP" -type f \( -name "*.so" -o -name "*.dylib" \) -print0 | \
+  xargs -0 -n1 codesign --force --options runtime --timestamp --sign "$SIGN"
+
+# Python.framework's main binary has no extension and is missed by the find above
+codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$SIGN" \
+  "$APP/Contents/Frameworks/Python.framework/Versions/3.13/Python"
+codesign --force --options runtime --timestamp --sign "$SIGN" "$APP/Contents/Frameworks/Python.framework"
+
+# Bundled MediaRemoteAdapter framework
+FW="$APP/Contents/Resources/vendor/mediaremote-adapter/Frameworks/MediaRemoteAdapter.framework"
+codesign --force --options runtime --timestamp --sign "$SIGN" "$FW/Versions/A/MediaRemoteAdapter"
+codesign --force --options runtime --timestamp --sign "$SIGN" "$FW"
+
+# Main executables (with hardened runtime entitlements for Python)
+codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$SIGN" "$APP/Contents/MacOS/python"
+codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$SIGN" "$APP/Contents/MacOS/NowPlayingDisplay"
+codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$SIGN" "$APP"
+
+# notarize + staple
+ditto -c -k --keepParent "$APP" "dist/NowPlayingDisplay.zip"
+xcrun notarytool submit "dist/NowPlayingDisplay.zip" --keychain-profile "your-profile" --wait
+xcrun stapler staple "$APP"
 ```
 
-### Firmware
+`entitlements.plist` (already in repo) grants the hardened runtime exceptions Python needs (`disable-library-validation`, `allow-unsigned-executable-memory`).
+
+Drop `dist/NowPlayingDisplay.app` into `/Applications` and launch it. Auto-detects the ESP32 via USB handshake and reconnects if unplugged/replugged.
+
+## Firmware
 
 Requires [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c6/get-started/) v5.1+.
 
@@ -45,60 +75,17 @@ idf.py set-target esp32c6
 idf.py build flash
 ```
 
-On first boot the display shows a QR code. Once the Mac-side bridge connects, it switches to the now-playing UI.
+On first boot the display shows a QR code. Once the Mac-side app connects, it switches to the now-playing UI.
 
-## Running
-
-### Menu bar app (recommended)
+## Updating the vendored adapter
 
 ```bash
-python menubar_app.py
-```
-
-Shows a status icon in the menu bar. Auto-detects the ESP32 via USB handshake and reconnects if unplugged/replugged.
-
-### Standalone bridge
-
-```bash
-python serial_bridge.py              # auto-detect
-python serial_bridge.py /dev/cu.usbmodemXXXXX  # explicit port
-```
-
-### Browser UI
-
-```bash
-python server.py
-# open http://localhost:8787
-```
-
-A browser version of the same UI, useful for development without the hardware.
-
-## Packaging the menu bar app
-
-Build a signed, notarized `.app` bundle:
-
-```bash
-pip install py2app
-python setup.py py2app
-
-# sign
-codesign --deep --force --options runtime --timestamp \
-  --sign "Developer ID Application: YOUR NAME (TEAMID)" \
-  "dist/Now Playing Bridge.app"
-
-# sign nested binaries individually for notarization
-find "dist/Now Playing Bridge.app" -type f \( -name "*.so" -o -name "*.dylib" \) \
-  -exec codesign --force --options runtime --timestamp \
-  --sign "Developer ID Application: YOUR NAME (TEAMID)" {} \;
-codesign --force --options runtime --timestamp \
-  --sign "Developer ID Application: YOUR NAME (TEAMID)" \
-  "dist/Now Playing Bridge.app"
-
-# notarize
-ditto -c -k --keepParent "dist/Now Playing Bridge.app" "dist/NowPlayingBridge.zip"
-xcrun notarytool submit "dist/NowPlayingBridge.zip" \
-  --keychain-profile "your-profile" --wait
-xcrun stapler staple "dist/Now Playing Bridge.app"
+git clone --depth 1 --branch vX.Y.Z https://github.com/ungive/mediaremote-adapter.git /tmp/mra
+cd /tmp/mra && mkdir build && cd build && cmake .. && cmake --build .
+cp -R MediaRemoteAdapter.framework <repo>/vendor/mediaremote-adapter/Frameworks/
+cp ../bin/mediaremote-adapter.pl    <repo>/vendor/mediaremote-adapter/bin/
+cp ../LICENSE                       <repo>/vendor/mediaremote-adapter/LICENSE
+echo "$(git rev-parse HEAD)\n$(git describe --tags)" > <repo>/vendor/mediaremote-adapter/VERSION
 ```
 
 ## USB protocol

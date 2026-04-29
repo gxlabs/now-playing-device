@@ -1,26 +1,136 @@
 #!/usr/bin/env python3
 """macOS menu bar app that bridges now-playing data to the ESP32 display.
 
-Runs the USB serial bridge in the background, auto-detects the device,
-and shows connection state in the menu bar icon.
+Reads now-playing state via the bundled mediaremote-adapter (Perl shim +
+MediaRemoteAdapter.framework, since macOS 15.4+ only authorizes the private
+MediaRemote framework for processes whose code signature reports a
+`com.apple.*` bundle id — `/usr/bin/perl` is `com.apple.perl`). Auto-detects
+the ESP32 over USB, pushes JSON state + RGB565 artwork, and forwards touch
+commands back as media controls.
 """
+import base64
 import glob
 import io
 import json
+import os
 import struct
 import subprocess
 import tempfile
 import threading
 import time
+from pathlib import Path
 
 import AppKit
 import rumps
 import serial
 from PIL import Image, ImageDraw
 
-from server import get_info, get_artwork_bytes, CONTROLS, NOWPLAYING_CLI
-
 ART_SIZE = 240
+PERL = "/usr/bin/perl"
+
+# ── Now-playing adapter ───────────────────────────────────────────
+
+_HERE = Path(__file__).parent
+_RP = os.environ.get("RESOURCEPATH")
+for _b in (Path(_RP) if _RP else None, _HERE):
+    if _b and (_b / "vendor" / "mediaremote-adapter").is_dir():
+        _ADAPTER = _b / "vendor" / "mediaremote-adapter"
+        break
+else:
+    raise RuntimeError("vendor/mediaremote-adapter not found")
+
+PERL_SCRIPT = str(_ADAPTER / "bin" / "mediaremote-adapter.pl")
+FRAMEWORK = str(_ADAPTER / "Frameworks" / "MediaRemoteAdapter.framework")
+
+# MRMediaRemoteCommand enum values
+COMMANDS = {"play": 0, "pause": 1, "toggle": 2, "next": 4, "previous": 5}
+
+
+def _adapter(*args, timeout=3) -> bytes:
+    return subprocess.run(
+        [PERL, PERL_SCRIPT, FRAMEWORK, *args],
+        capture_output=True, timeout=timeout,
+    ).stdout
+
+
+# Anchor elapsed time because MediaRemote only snapshots it at
+# play/pause/seek/track-change. We extrapolate between snapshots.
+_anchor_lock = threading.Lock()
+_anchor = {"id": None, "elapsed": 0.0, "rate": 0.0, "t": 0.0}
+
+
+def _compute_elapsed(reported: float, rate: float, track_id) -> float:
+    now = time.monotonic()
+    with _anchor_lock:
+        if (
+            track_id != _anchor["id"]
+            or abs(reported - _anchor["elapsed"]) > 0.5
+            or rate != _anchor["rate"]
+        ):
+            _anchor.update(id=track_id, elapsed=reported, rate=rate, t=now)
+        return _anchor["elapsed"] + (now - _anchor["t"]) * _anchor["rate"]
+
+
+def _payload(with_artwork: bool = False) -> dict:
+    args = ["get", "--micros"]
+    if not with_artwork:
+        args.append("--no-artwork")
+    out = _adapter(*args)
+    if not out.strip():
+        return {}
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        return {}
+
+
+def get_info() -> dict:
+    p = _payload(with_artwork=False)
+    title = p.get("title")
+    if not title:
+        return {"playing": False, "trackId": "", "artworkId": ""}
+
+    reported = float(p.get("elapsedTimeMicros", 0)) / 1_000_000.0
+    duration = float(p.get("durationMicros", 0)) / 1_000_000.0
+    rate = float(p.get("playbackRate") or 0.0)
+    uid = p.get("uniqueIdentifier")
+    track_id = str(uid) if uid is not None else f"{p.get('artist','')}|{title}"
+    elapsed = _compute_elapsed(reported, rate, track_id)
+
+    # `playing` on the wire means "has track loaded" — the firmware uses it
+    # to decide whether to show the controls overlay vs the idle screen.
+    # Actual play-vs-pause state is driven by `playbackRate` (0 = paused).
+    return {
+        "playing": True,
+        "title": title,
+        "artist": p.get("artist") or "",
+        "album": p.get("album") or "",
+        "duration": duration,
+        "elapsed": elapsed,
+        "playbackRate": rate,
+        "bundleId": p.get("bundleIdentifier") or "",
+        "trackId": track_id,
+        "artworkId": str(p.get("contentItemIdentifier") or ""),
+    }
+
+
+def get_artwork_bytes() -> bytes | None:
+    data = _payload(with_artwork=True).get("artworkData")
+    if not data:
+        return None
+    try:
+        return base64.b64decode(data)
+    except Exception:
+        return None
+
+
+def send_command(action: str) -> bool:
+    code = COMMANDS.get(action)
+    if code is None:
+        return False
+    _adapter("send", str(code))
+    return True
+
 
 # ── Menu bar icon (circle with check or cross) ────────────────────
 
@@ -124,13 +234,7 @@ def read_commands(port):
             line, buf = buf.split(b"\n", 1)
             text = line.decode("utf-8", errors="ignore").strip()
             if text.startswith("CMD:"):
-                action = text[4:]
-                cmd = CONTROLS.get(action)
-                if cmd:
-                    subprocess.run(
-                        [NOWPLAYING_CLI, cmd],
-                        capture_output=True, timeout=3,
-                    )
+                send_command(text[4:])
 
 
 # ── App ───────────────────────────────────────────────────────────
