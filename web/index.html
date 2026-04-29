@@ -149,7 +149,7 @@
 <body>
 <main>
   <h1>Now Playing Display</h1>
-  <p class="tagline">A macOS menu bar app that streams what you're playing — album art, track info, progress — to a USB-connected ESP32-C6 round display.</p>
+  <p class="tagline">A macOS menu bar app that streams what you're playing (album art, track info, progress) to a USB-connected ESP32-C6 round display.</p>
 
   <img class="hero" src="screenshot.jpg" alt="The device showing &quot;Electric Relaxation&quot; by A Tribe Called Quest">
 
@@ -160,36 +160,36 @@
   <h2>Hardware</h2>
   <ul>
     <li><a href="https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html">Seeed XIAO ESP32-C6</a></li>
-    <li><a href="https://www.seeedstudio.com/Seeed-Studio-Round-Display-for-XIAO-p-5638.html">Seeed Round Display for XIAO</a> — 240×240 GC9A01A + CHSC6X touch</li>
+    <li><a href="https://www.seeedstudio.com/Seeed-Studio-Round-Display-for-XIAO-p-5638.html">Seeed Round Display for XIAO</a> (240×240 GC9A01A + CHSC6X touch)</li>
     <li>USB-C cable</li>
   </ul>
 
   <h2>3D-printed case</h2>
-  <p>STLs are published on <a href="https://www.thingiverse.com/thing:6938412">Thingiverse</a> — the case snaps around the round-display board and exposes the USB-C port.</p>
+  <p>STLs are published on <a href="https://www.thingiverse.com/thing:6938412">Thingiverse</a>. The case snaps around the round-display board and exposes the USB-C port.</p>
 
   <h2>Setup</h2>
 
-  <h3>1. Download the Mac app</h3>
-  <a class="download" href="./NowPlayingDisplay.zip">Download NowPlayingDisplay.zip</a>
-
-  <h3>2. Flash the firmware</h3>
-  <p>Pre-built firmware is available as a single merged image: <a href="./firmware.bin">firmware.bin</a> (flash to offset <code>0x0</code>).</p>
-  <p>Install <code>esptool</code> if you don't have it:</p>
+  <h3>1. Flash the firmware</h3>
+  <a class="download" href="./firmware.bin">Download firmware.bin</a>
+  <p>Pre-built firmware is a single merged image (flash to offset <code>0x0</code>).</p>
+  <p>Easiest method: open the <a href="https://espressif.github.io/esptool-js/">ESP web tool</a> in Chrome (uses WebSerial), connect to the device, and flash <code>firmware.bin</code> at offset <code>0x0</code>.</p>
+  <p>Or via the CLI. Install <code>esptool</code>:</p>
   <pre><code>pip install esptool   # or: brew install esptool</code></pre>
   <p>Plug in the XIAO ESP32-C6 over USB-C, then flash:</p>
   <pre><code>esptool.py --chip esp32c6 --port /dev/cu.usbmodem* write_flash 0x0 firmware.bin</code></pre>
-  <div class="callout"><strong>Note</strong> — on Linux/Windows the port path is different (<code>/dev/ttyUSB0</code>, <code>COM3</code>, etc). If <code>esptool</code> can't enter download mode automatically, hold the <code>BOOT</code> button on the XIAO while plugging in (or pressing <code>RESET</code>).</div>
+  <div class="callout"><strong>Note:</strong> on Linux/Windows the port path is different (<code>/dev/ttyUSB0</code>, <code>COM3</code>, etc). If <code>esptool</code> can't enter download mode automatically, hold the <code>BOOT</code> button on the XIAO while plugging in (or pressing <code>RESET</code>).</div>
   <p>Or build from source via ESP-IDF (<code>idf.py build flash</code>) using the <code>firmware/</code> tree in the repo.</p>
 
-  <h3>3. Launch the Mac app</h3>
-  <p>Drag <strong>NowPlayingDisplay.app</strong> to <code>/Applications</code> and launch it. It auto-detects the ESP32 over USB and reconnects on replug — no configuration.</p>
+  <h3>2. Install the Mac app</h3>
+  <a class="download" href="./NowPlayingDisplay.app">Download NowPlayingDisplay.app</a>
+  <p>Drag <strong>NowPlayingDisplay.app</strong> to <code>/Applications</code> and launch it. It auto-detects the ESP32 over USB and reconnects on replug, no configuration.</p>
 
   <h2>How it works</h2>
   <div class="diagram">┌───────────┐  USB serial    ┌────────────────┐  /usr/bin/python3  ┌──────────────────┐
 │ ESP32-C6  │ ◄────────────  │  Menu bar app  │ ◄────────────────  │ Apple Music      │
 │ + display │ ─────────────► │   (Mac side)   │ ─────────────────► │  / Spotify, etc  │
 └───────────┘  touch cmds    └────────────────┘   media controls   └──────────────────┘</div>
-  <p>The Mac reads now-playing metadata via the bundled <a href="https://github.com/ungive/mediaremote-adapter"><code>MediaRemoteAdapter.framework</code></a>, loaded in-process by <code>/usr/bin/python3</code> (a <code>com.apple.*</code>-signed binary — macOS 15.4+ only authorizes the private MediaRemote framework for callers with an Apple bundle id, so the bundled py2app Python can't reach it directly). Artwork is converted to RGB565 and pushed to the ESP32 over USB; touches on the round display send prev/play-pause/next back to the Mac.</p>
+  <p>The Mac reads now-playing metadata via the bundled <a href="https://github.com/ungive/mediaremote-adapter"><code>MediaRemoteAdapter.framework</code></a>, loaded in-process by <code>/usr/bin/python3</code> (a <code>com.apple.*</code>-signed binary, since macOS 15.4+ only authorizes the private MediaRemote framework for callers with an Apple bundle id, so the bundled py2app Python can't reach it directly). Artwork is converted to RGB565 and pushed to the ESP32 over USB; touches on the round display send prev/play-pause/next back to the Mac.</p>
 
   <footer>
     gxlabs.co/now-playing
