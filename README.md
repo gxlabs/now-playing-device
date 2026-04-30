@@ -116,3 +116,5 @@ This project would not be possible without [ungive/mediaremote-adapter](https://
 ## Buy me a coffee
 
 If this project saved you some time or made your desk a little nicer, you can support further work at [buymeacoffee.com/gxlabs](https://buymeacoffee.com/gxlabs).
+
+<a href="https://buymeacoffee.com/gxlabs"><img src="bmc-qr.png" alt="Buy Me a Coffee QR code" width="160"></a>
