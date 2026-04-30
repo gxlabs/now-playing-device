@@ -111,4 +111,4 @@ The Mac and ESP32 communicate over USB serial with a simple binary protocol:
 
 ## Buy me a coffee
 
-If this project saved you some time or made your desk a little nicer, you can support further work at [buymeacoffee.com/glenrobertson](https://buymeacoffee.com/glenrobertson).
+If this project saved you some time or made your desk a little nicer, you can support further work at [buymeacoffee.com/gxlabs](https://buymeacoffee.com/gxlabs).
