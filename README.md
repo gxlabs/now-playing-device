@@ -113,7 +113,7 @@ The Mac and ESP32 communicate over USB serial with a simple binary protocol:
 
 This project would not be possible without [ungive/mediaremote-adapter](https://github.com/ungive/mediaremote-adapter), which provides the Apple-signed bridge into the private MediaRemote framework on macOS 15.4+. Huge thanks to [@ungive](https://github.com/ungive) for building and maintaining it.
 
-## Buy me a coffee
+## Gratuity
 
 If this project saved you some time or made your desk a little nicer, you can support further work at [buymeacoffee.com/gxlabs](https://buymeacoffee.com/gxlabs).
 
