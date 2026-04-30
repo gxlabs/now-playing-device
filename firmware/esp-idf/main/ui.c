@@ -279,6 +279,14 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
 
+    /* Scroll template: 5s dwell at each end so the back-and-forth reads as
+       deliberate rather than glitchy. LVGL's default 300ms reverse/repeat
+       delay reverses fast enough that long titles look like they're juddering. */
+    static lv_anim_t scroll_anim_template;
+    lv_anim_init(&scroll_anim_template);
+    lv_anim_set_repeat_delay(&scroll_anim_template, 5000);
+    lv_anim_set_reverse_delay(&scroll_anim_template, 5000);
+
     /* Title */
     title_label = lv_label_create(overlay);
     lv_obj_set_width(title_label, S - 4);
@@ -287,6 +295,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(title_label, &montserrat_ext_18, 0);
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_anim(title_label, &scroll_anim_template, LV_PART_MAIN);
     lv_label_set_long_mode(title_label, LV_LABEL_LONG_SCROLL);
 
     /* Artist */
@@ -297,6 +306,7 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_set_style_text_color(artist_label, lv_color_make(200, 200, 200), 0);
     lv_obj_set_style_text_font(artist_label, &montserrat_ext_16, 0);
     lv_obj_set_style_text_align(artist_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_anim(artist_label, &scroll_anim_template, LV_PART_MAIN);
     lv_label_set_long_mode(artist_label, LV_LABEL_LONG_SCROLL);
 
     /* Progress row: elapsed (fixed-width) | bar | remaining (fixed-width)
