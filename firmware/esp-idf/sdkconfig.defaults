@@ -6,11 +6,9 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
-# Primary console on UART0 (no pin attached); USB-Serial-JTAG mirrors logs +
-# panic output so they come through USB-CDC alongside the binary data protocol.
-# The host's read_commands strips non-CMD lines as [RX].
+# Route ALL console output to UART0 so USB serial is free for data protocol
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
-CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
 # LVGL: disable built-in Montserrat fonts (ASCII-only). We ship custom
 # montserrat_ext_* in main/fonts/ that cover Latin-1 Supplement +

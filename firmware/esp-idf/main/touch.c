@@ -1,8 +1,7 @@
 #include "touch.h"
 #include "ui.h"
 
-#include "freertos/FreeRTOS.h"
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
 #include "driver/gpio.h"
 #include "esp_lvgl_port.h"
 #include "esp_log.h"
@@ -12,20 +11,14 @@ static const char *TAG = "touch";
 #define CHSC6X_ADDR  0x2E
 #define PIN_SDA      GPIO_NUM_22
 #define PIN_SCL      GPIO_NUM_23
-#define I2C_PORT     I2C_NUM_0
+#define PIN_INT      GPIO_NUM_17
 
-/* Uses the legacy `driver/i2c.h` API (polling/FSM-reset on bus-busy) instead
-   of the new `driver/i2c_master.h` driver. The new driver's ISR has an
-   unbounded `while(i2c_ll_is_bus_busy(...)){}` spin that occasionally hangs
-   on CHSC6X reads and trips the interrupt watchdog (chip reboots → setup
-   QR). Fixed in IDF 5.3+; legacy driver here works around it on 5.2.x. */
+static i2c_master_dev_handle_t s_dev;
 
 static void read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
     uint8_t buf[5] = {0};
-    esp_err_t ret = i2c_master_read_from_device(I2C_PORT, CHSC6X_ADDR,
-                                                buf, sizeof(buf),
-                                                pdMS_TO_TICKS(10));
+    esp_err_t ret = i2c_master_receive(s_dev, buf, sizeof(buf), pdMS_TO_TICKS(10));
     bool pressed = (ret == ESP_OK && buf[0] > 0);
 
     /* If a press wakes the screen from dim, swallow that whole press so the
@@ -49,17 +42,27 @@ static void read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 
 void touch_init(void)
 {
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
+    /* I2C bus */
+    i2c_master_bus_config_t bus_cfg = {
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .i2c_port = I2C_NUM_0,
         .sda_io_num = PIN_SDA,
         .scl_io_num = PIN_SCL,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = 100000,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
     };
-    ESP_ERROR_CHECK(i2c_param_config(I2C_PORT, &conf));
-    ESP_ERROR_CHECK(i2c_driver_install(I2C_PORT, conf.mode, 0, 0, 0));
+    i2c_master_bus_handle_t bus;
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &bus));
 
+    /* CHSC6X touch device */
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = CHSC6X_ADDR,
+        .scl_speed_hz = 100000,
+    };
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus, &dev_cfg, &s_dev));
+
+    /* Register as LVGL input device */
     if (lvgl_port_lock(0)) {
         lv_indev_t *indev = lv_indev_create();
         lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
