@@ -53,17 +53,16 @@ static bool s_connected;   /* true after first state update */
 
 #define OPTIMISTIC_HOLD_MS 1500
 
-/* Idle dim — the Mac pushes state every second whether or not anything
-   changed, so "activity" specifically means a track or play/pause transition,
-   or a touch press. Pure same-track playback doesn't count. */
+/* Idle dim — active playback counts as activity (so the screen stays lit
+   while music plays, even on the same track), as do touch presses. Once
+   playback stops or pauses, the timer runs and the screen dims after
+   IDLE_TIMEOUT_MS. */
 #define IDLE_TIMEOUT_MS (5 * 60 * 1000)
 #define BL_FULL  255
 #define BL_DIM   20
 
 static uint32_t s_last_activity_ms;
 static bool s_dimmed;
-static char s_prev_track_id[64];
-static bool s_prev_was_playing;
 
 /* Server presence: if we don't receive a state frame for a while, the Mac-side
    app isn't running. Revert to the setup QR so the user knows. */
@@ -396,18 +395,11 @@ void ui_update_from_state(const np_state_t *state, const uint8_t *art_pixels,
         ESP_LOGI(TAG, "connected — hiding setup QR");
     }
 
-    /* Detect meaningful change for the idle dim timer. The Mac pushes state
-       every second, so we only count track changes and play/pause transitions
-       — not steady-state playback of the same track. */
-    bool now_playing_active = state->playing && state->playback_rate > 0;
-    bool track_changed = strncmp(s_prev_track_id, state->track_id,
-                                 sizeof(s_prev_track_id)) != 0;
-    if (track_changed || s_prev_was_playing != now_playing_active) {
+    /* Active playback keeps the screen lit. When paused or stopped, the idle
+       timer runs and the screen dims after IDLE_TIMEOUT_MS. */
+    if (state->playing && state->playback_rate > 0) {
         ui_mark_activity();
     }
-    strncpy(s_prev_track_id, state->track_id, sizeof(s_prev_track_id) - 1);
-    s_prev_track_id[sizeof(s_prev_track_id) - 1] = '\0';
-    s_prev_was_playing = now_playing_active;
 
     if (!state->playing) {
         lv_obj_add_flag(art_img, LV_OBJ_FLAG_HIDDEN);
