@@ -31,6 +31,11 @@ from PIL import Image, ImageDraw
 ART_SIZE = 240
 PYTHON = "/usr/bin/python3"
 
+# After this long with no actual playback (rate > 0), report `playing: false`
+# to the device so it shows "Nothing playing" and its idle timer dims the
+# screen. Keeps a forgotten paused track from sitting on screen indefinitely.
+RECENT_PLAY_TIMEOUT_S = 5 * 60
+
 # ── Now-playing adapter ───────────────────────────────────────────
 
 _HERE = Path(__file__).parent
@@ -330,6 +335,7 @@ class NowPlayingBridge(rumps.App):
         self.reader_thread = None
         self.heartbeat_thread = None
         self.last_art_id = ""
+        self._last_played_ts = 0.0  # monotonic time of last rate > 0 observation
         self._was_connected = False
         self._port_item = rumps.MenuItem("No device")
         self._track_item = rumps.MenuItem("Nothing playing")
@@ -401,6 +407,13 @@ class NowPlayingBridge(rumps.App):
             info = get_info()
         except Exception:
             return
+
+        if info.get("playing") and float(info.get("playbackRate") or 0) > 0:
+            self._last_played_ts = time.monotonic()
+        elif time.monotonic() - self._last_played_ts > RECENT_PLAY_TIMEOUT_S:
+            # Nothing has actually played for a while — drop the (likely paused
+            # or stale) track so the device idles out.
+            info = {"playing": False, "trackId": "", "artworkId": ""}
 
         if not self._icon_hidden:
             if info.get("playing"):
