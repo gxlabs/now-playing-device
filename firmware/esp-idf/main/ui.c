@@ -312,16 +312,16 @@ static void create_playing_screen(lv_obj_t *scr)
        — fixed widths reserve space for the longest expected times so the
        bar can sit between them with consistent 1px padding. */
     elapsed_label = lv_label_create(overlay);
-    lv_obj_set_width(elapsed_label, 36);
-    lv_obj_align(elapsed_label, LV_ALIGN_TOP_LEFT, 20, 52);
+    lv_obj_set_width(elapsed_label, 58);
+    lv_obj_align(elapsed_label, LV_ALIGN_TOP_LEFT, 10, 52);
     lv_label_set_text(elapsed_label, "0:00");
     lv_obj_set_style_text_color(elapsed_label, lv_color_make(180, 180, 180), 0);
     lv_obj_set_style_text_font(elapsed_label, &montserrat_ext_14, 0);
     lv_obj_set_style_text_align(elapsed_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     progress_bar = lv_bar_create(overlay);
-    lv_obj_set_size(progress_bar, 120, 5);
-    lv_obj_align(progress_bar, LV_ALIGN_TOP_LEFT, 59, 57);
+    lv_obj_set_size(progress_bar, 92, 5);
+    lv_obj_align(progress_bar, LV_ALIGN_TOP_LEFT, 71, 57);
     lv_bar_set_range(progress_bar, 0, 1000);
     lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(progress_bar, lv_color_white(), LV_PART_MAIN);
@@ -332,8 +332,8 @@ static void create_playing_screen(lv_obj_t *scr)
     lv_obj_set_style_radius(progress_bar, 3, LV_PART_INDICATOR);
 
     remaining_label = lv_label_create(overlay);
-    lv_obj_set_width(remaining_label, 42);
-    lv_obj_align(remaining_label, LV_ALIGN_TOP_LEFT, 182, 52);
+    lv_obj_set_width(remaining_label, 64);
+    lv_obj_align(remaining_label, LV_ALIGN_TOP_LEFT, 166, 52);
     lv_label_set_text(remaining_label, "-0:00");
     lv_obj_set_style_text_color(remaining_label, lv_color_make(180, 180, 180), 0);
     lv_obj_set_style_text_font(remaining_label, &montserrat_ext_14, 0);
