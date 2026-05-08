@@ -5,6 +5,7 @@
 #include "driver/gpio.h"
 #include "esp_lvgl_port.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
 
 static const char *TAG = "touch";
 
