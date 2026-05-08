@@ -147,11 +147,17 @@ static void progress_timer_cb(lv_timer_t *t)
     if (rem_int < 0) rem_int = 0;
 
     char buf[16];
-    snprintf(buf, sizeof(buf), "%d:%02d", e_int / 60, e_int % 60);
-    lv_label_set_text(elapsed_label, buf);
-
     char rbuf[16];
-    snprintf(rbuf, sizeof(rbuf), "-%d:%02d", rem_int / 60, rem_int % 60);
+    if (dur_int >= 3600) {
+        snprintf(buf, sizeof(buf), "%d:%02d:%02d",
+                 e_int / 3600, (e_int / 60) % 60, e_int % 60);
+        snprintf(rbuf, sizeof(rbuf), "-%d:%02d:%02d",
+                 rem_int / 3600, (rem_int / 60) % 60, rem_int % 60);
+    } else {
+        snprintf(buf, sizeof(buf), "%d:%02d", e_int / 60, e_int % 60);
+        snprintf(rbuf, sizeof(rbuf), "-%d:%02d", rem_int / 60, rem_int % 60);
+    }
+    lv_label_set_text(elapsed_label, buf);
     lv_label_set_text(remaining_label, rbuf);
 }
 
