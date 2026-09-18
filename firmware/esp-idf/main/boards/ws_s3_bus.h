@@ -7,11 +7,12 @@
 
 #include "driver/i2c_master.h"
 
-/* Which way up the screen runs. 0 puts the image the same way up as the
-   USB-C connector, i.e. the device reads right way up when hung with the
-   cable at the top; 1 is Waveshare's demo orientation (cable at the bottom).
+/* Which way up the screen runs. The panel's native raster puts the top of the
+   image at the end the USB-C connector is on, which is Waveshare's demo
+   orientation (cable at the bottom of the picture). Flipping 180 degrees puts
+   the cable at the top, which is how this thing is meant to sit on a desk.
    The panel and the touch panel flip together. */
-#define BOARD_FLIP_180  0
+#define BOARD_FLIP_180  1
 
 /* Shared I2C master bus (SDA GPIO11 / SCL GPIO10). Created on first call. */
 i2c_master_bus_handle_t board_i2c_bus(void);

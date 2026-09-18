@@ -85,7 +85,7 @@ void display_init(void)
     /* QSPI bus */
     const spi_bus_config_t bus = SPD2010_PANEL_BUS_QSPI_CONFIG(
         PIN_CLK, PIN_D0, PIN_D1, PIN_D2, PIN_D3,
-        LCD_H_RES * DRAW_LINES * sizeof(uint16_t));
+        LCD_H_RES * 80 * sizeof(uint16_t));
     ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST_ID, &bus, SPI_DMA_CH_AUTO));
 
     /* LCD panel IO (QSPI) */
@@ -105,11 +105,15 @@ void display_init(void)
         .vendor_config = (void *)&vendor_cfg,
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_spd2010(io, &panel_cfg, &panel));
+    /* With no reset GPIO of its own the driver issues a software reset — the
+       vendor init sequence below assumes the panel starts from there. */
+    ESP_ERROR_CHECK(esp_lcd_panel_reset(panel));
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
     ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel, BOARD_FLIP_180, BOARD_FLIP_180));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
 
     ESP_LOGI(TAG, "SPD2010 initialized (%dx%d QSPI)", LCD_H_RES, LCD_V_RES);
+
 
     /* LVGL port */
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
