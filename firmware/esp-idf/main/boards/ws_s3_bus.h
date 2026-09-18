@@ -14,6 +14,13 @@
    The panel and the touch panel flip together. */
 #define BOARD_FLIP_180  1
 
+/* Touch is deliberately NOT flipped along with the display, and this is
+   measured rather than reasoned: with the display software-rotated, presses
+   land on the right widgets as the controller reports them, and inverting
+   here puts every one of them 180 degrees out. Kept as its own switch rather
+   than reusing BOARD_FLIP_180 precisely because the two disagree. */
+#define BOARD_TOUCH_FLIP_180  0
+
 /* Shared I2C master bus (SDA GPIO11 / SCL GPIO10). Created on first call. */
 i2c_master_bus_handle_t board_i2c_bus(void);
 

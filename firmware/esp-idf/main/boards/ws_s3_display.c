@@ -109,7 +109,6 @@ void display_init(void)
        vendor init sequence below assumes the panel starts from there. */
     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel));
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
-    ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel, BOARD_FLIP_180, BOARD_FLIP_180));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
 
     ESP_LOGI(TAG, "SPD2010 initialized (%dx%d QSPI)", LCD_H_RES, LCD_V_RES);
@@ -119,6 +118,11 @@ void display_init(void)
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
 
+    /* Rotation is done in software rather than with esp_lcd_panel_mirror():
+       this panel ignores the MADCTL axis-flip bits the SPD2010 driver writes,
+       so the picture comes out the same either way. A 180 degree rotation
+       keeps every flush area 4-pixel aligned (412 is a multiple of 4), so the
+       rounder above still holds. Touch is flipped to match in ws_s3_touch.c. */
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle = io,
         .panel_handle = panel,
@@ -130,12 +134,17 @@ void display_init(void)
         .flags = {
             .buff_dma = 1,
             .swap_bytes = 1,
+            .sw_rotate = BOARD_FLIP_180,
         },
     };
-    if (!lvgl_port_add_disp(&disp_cfg)) {
+    lv_display_t *disp = lvgl_port_add_disp(&disp_cfg);
+    if (!disp) {
         ESP_LOGE(TAG, "lvgl_port_add_disp failed");
         abort();
     }
+#if BOARD_FLIP_180
+    lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_180);
+#endif
 
     ESP_LOGI(TAG, "LVGL display ready");
 }

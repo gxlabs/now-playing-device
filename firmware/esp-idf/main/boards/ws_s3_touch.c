@@ -184,11 +184,14 @@ static void read_cb(lv_indev_t *indev, lv_indev_data_t *data)
     if (pressed) {
         if (x >= UI_SIZE) x = UI_SIZE - 1;
         if (y >= UI_SIZE) y = UI_SIZE - 1;
-#if BOARD_FLIP_180
+    }
+
+#if BOARD_TOUCH_FLIP_180
+    if (pressed) {
         x = UI_SIZE - 1 - x;
         y = UI_SIZE - 1 - y;
-#endif
     }
+#endif
 
     /* If a press wakes the screen from dim, swallow that whole press so the
        user doesn't accidentally hit prev/play/next while just trying to
