@@ -1,6 +1,6 @@
 # Now Playing Device
 
-A macOS "now playing" display for the [Seeed XIAO ESP32-C6](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html) paired with the [Seeed Round Display for XIAO](https://www.seeedstudio.com/Seeed-Studio-Round-Display-for-XIAO-p-5638.html). Shows album art, track info, progress, and playback controls on a 240x240 circular TFT — connected over USB.
+A macOS "now playing" display for a small round ESP32 screen. Shows album art, track info, progress, and playback controls — connected over USB.
 
 ![The device showing "Money" by Pink Floyd](screenshot.jpg)
 
@@ -10,17 +10,28 @@ A macOS "now playing" display for the [Seeed XIAO ESP32-C6](https://www.seeedstu
 
 ```
 ┌───────────┐  USB serial    ┌────────────────┐  /usr/bin/python3  ┌──────────────────┐
-│ ESP32-C6  │ ◄────────────  │  Menu bar app  │ ◄────────────────  │ Apple Music      │
+│   ESP32   │ ◄────────────  │  Menu bar app  │ ◄────────────────  │ Apple Music      │
 │ + display │ ─────────────► │   (Mac side)   │ ─────────────────► │  / Spotify, etc  │
 └───────────┘  touch cmds    └────────────────┘  media controls    └──────────────────┘
 ```
 
-The Mac reads now-playing metadata via the bundled [`MediaRemoteAdapter.framework`](https://github.com/ungive/mediaremote-adapter), loaded in-process by `/usr/bin/python3` (a `com.apple.*`-signed binary — macOS 15.4+ only authorizes the private MediaRemote framework for callers with an Apple bundle id, so the bundled py2app Python can't reach it directly). Artwork is converted to RGB565 and pushed to the ESP32 over USB serial; touch input on the display sends prev/toggle/next commands back.
+The Mac reads now-playing metadata via the bundled [`MediaRemoteAdapter.framework`](https://github.com/ungive/mediaremote-adapter), loaded in-process by `/usr/bin/python3` (a `com.apple.*`-signed binary — macOS 15.4+ only authorizes the private MediaRemote framework for callers with an Apple bundle id, so the bundled py2app Python can't reach it directly). Artwork is converted to RGB565 and pushed to the ESP32 over USB serial; touch input on the display sends prev/toggle/next commands back. The device declares its own panel size in the USB handshake, so one build of the Mac app drives either board.
 
 ## Hardware
 
+Two boards are supported. The firmware picks the right one from the build target; the UI is authored against the 240px panel and scaled from there (see `main/board.h`).
+
+**Seeed XIAO ESP32-C6** (`idf.py set-target esp32c6`)
+
 - [Seeed XIAO ESP32-C6](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C6-p-5884.html)
-- [Seeed Round Display for XIAO](https://www.seeedstudio.com/Seeed-Studio-Round-Display-for-XIAO-p-5638.html) (GC9A01A 240x240 + CHSC6X touch)
+- [Seeed Round Display for XIAO](https://www.seeedstudio.com/Seeed-Studio-Round-Display-for-XIAO-p-5638.html) (GC9A01A 240x240 SPI + CHSC6X touch)
+
+**Waveshare ESP32-S3-Touch-LCD-1.46** (`idf.py set-target esp32s3`)
+
+- [ESP32-S3-Touch-LCD-1.46](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-1.46) — ESP32-S3R8, 16MB flash, 8MB octal PSRAM
+- SPD2010 412x412 round IPS over QSPI, SPD2010 capacitive touch over I2C
+- Both reset lines hang off an onboard TCA9554 expander, so `boards/ws_s3_bus.c` releases them before the panel and touch drivers come up
+- The screen runs with the USB-C connector at the top. Flip `BOARD_FLIP_180` in `main/boards/ws_s3_bus.h` to mount it the other way up (panel and touch flip together)
 
 ## Building the menu bar app
 
@@ -77,13 +88,21 @@ Open `dist/NowPlayingDisplay.dmg`, drag `NowPlayingDisplay.app` to `/Application
 
 ## Firmware
 
-Requires [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c6/get-started/) v5.1+.
+Requires [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/get-started/) v5.1+ (v5.5 for the ESP32-S3 board).
 
 ```bash
 cd firmware/esp-idf
+
+# Waveshare ESP32-S3-Touch-LCD-1.46
+idf.py set-target esp32s3
+idf.py build flash
+
+# ...or Seeed XIAO ESP32-C6 + Round Display
 idf.py set-target esp32c6
 idf.py build flash
 ```
+
+`set-target` regenerates `sdkconfig` from `sdkconfig.defaults` plus the matching `sdkconfig.defaults.<target>`, so switching boards means re-running it. Console logging goes to UART0 — USB serial belongs to the data protocol.
 
 On first boot the display shows a QR code. Once the Mac-side app connects, it switches to the now-playing UI.
 
@@ -103,9 +122,9 @@ The Mac and ESP32 communicate over USB serial with a simple binary protocol:
 
 | Direction | Header | Payload |
 |-----------|--------|---------|
-| Mac → ESP | `0x00` | Ping (ESP responds `NP:ACK\n`) |
+| Mac → ESP | `0x00` | Ping (ESP responds `NP:ACK:<art size>\n`, e.g. `NP:ACK:412`) |
 | Mac → ESP | `0x01` + 2-byte BE length | JSON state |
-| Mac → ESP | `0x02` + 4-byte BE length | RGB565 artwork (240×240) |
+| Mac → ESP | `0x02` + 4-byte BE length | RGB565 artwork, square, sized to the panel |
 | Mac → ESP | `0x03` | Heartbeat (separate from state, sent every 1s so a stalled MediaRemote query doesn't trigger the disconnect watchdog) |
 | ESP → Mac | `CMD:<action>\n` | Touch command (toggle/next/previous) |
 

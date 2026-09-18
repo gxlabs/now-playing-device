@@ -14,6 +14,7 @@ import inspect
 import io
 import json
 import os
+import re
 import struct
 import subprocess
 import tempfile
@@ -28,7 +29,10 @@ import serial
 from Foundation import NSBundle
 from PIL import Image, ImageDraw
 
-ART_SIZE = 240
+# Artwork side length, in pixels. The device declares its own in the handshake
+# (240 for the XIAO round display, 412 for the Waveshare 1.46"); this is the
+# fallback for firmware old enough not to say.
+DEFAULT_ART_SIZE = 240
 PYTHON = "/usr/bin/python3"
 
 # After this long with no actual playback (rate > 0), report `playing: false`
@@ -258,19 +262,32 @@ def get_icon(connected: bool) -> str:
 
 # ── Serial helpers ────────────────────────────────────────────────
 
-def jpeg_to_rgb565(jpeg_bytes: bytes) -> bytes:
+# Per-byte lookup tables for the RGB565 pack: hi = rrrrrggg, lo = gggbbbbb.
+# Doing it this way keeps every step (translate, the big-int OR, the strided
+# slice assignment) inside C — a per-pixel Python loop costs the better part of
+# a second at 412x412.
+_T_R_HI = bytes((v & 0xF8) for v in range(256))
+_T_G_HI = bytes((v >> 5) for v in range(256))
+_T_G_LO = bytes(((v << 3) & 0xE0) for v in range(256))
+_T_B_LO = bytes((v >> 3) for v in range(256))
+
+
+def jpeg_to_rgb565(jpeg_bytes: bytes, size: int) -> bytes:
     img = Image.open(io.BytesIO(jpeg_bytes))
-    img = img.resize((ART_SIZE, ART_SIZE), Image.LANCZOS)
+    img = img.resize((size, size), Image.LANCZOS)
     if img.mode != "RGB":
         img = img.convert("RGB")
-    px = img.tobytes()
-    out = bytearray(ART_SIZE * ART_SIZE * 2)
-    for i in range(0, len(px), 3):
-        r, g, b = px[i], px[i + 1], px[i + 2]
-        c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
-        j = (i // 3) * 2
-        out[j] = c & 0xFF
-        out[j + 1] = (c >> 8) & 0xFF
+    r, g, b = (c.tobytes() for c in img.split())
+    n = size * size
+
+    hi = (int.from_bytes(r.translate(_T_R_HI), "big")
+          | int.from_bytes(g.translate(_T_G_HI), "big")).to_bytes(n, "big")
+    lo = (int.from_bytes(g.translate(_T_G_LO), "big")
+          | int.from_bytes(b.translate(_T_B_LO), "big")).to_bytes(n, "big")
+
+    out = bytearray(n * 2)
+    out[0::2] = lo   # little-endian RGB565, as the firmware expects
+    out[1::2] = hi
     return bytes(out)
 
 
@@ -290,18 +307,24 @@ def send_heartbeat(port, lock):
         port.write(b"\x03")
 
 
+# "NP:ACK" from older firmware, "NP:ACK:412" from firmware that sizes its own
+# artwork. Boot-time log chatter can share the buffer, hence the search.
+_ACK_RE = re.compile(rb"NP:ACK(?::(\d+))?")
+
+
 def find_device():
+    """Return (path, art_size) for the first device that answers, else None."""
     for path in glob.glob("/dev/cu.usbmodem*"):
         try:
             port = serial.Serial(path, 115200, timeout=0.5)
             port.reset_input_buffer()
             port.write(b"\x00")
             time.sleep(0.2)
-            resp = port.read(port.in_waiting or 20)
-            if b"NP:ACK" in resp:
-                port.close()
-                return path
+            resp = port.read(port.in_waiting or 32)
             port.close()
+            m = _ACK_RE.search(resp)
+            if m:
+                return path, int(m.group(1)) if m.group(1) else DEFAULT_ART_SIZE
         except Exception:
             pass
     return None
@@ -331,6 +354,7 @@ class NowPlayingBridge(rumps.App):
         super().__init__("", icon=get_icon(False), quit_button="Quit")
         self.port = None
         self.port_path = None
+        self.art_size = DEFAULT_ART_SIZE
         self.port_lock = threading.Lock()
         self.reader_thread = None
         self.heartbeat_thread = None
@@ -431,7 +455,7 @@ class NowPlayingBridge(rumps.App):
             if art_id and art_id != self.last_art_id:
                 jpeg = get_artwork_bytes()
                 if jpeg:
-                    rgb565 = jpeg_to_rgb565(jpeg)
+                    rgb565 = jpeg_to_rgb565(jpeg, self.art_size)
                     send_artwork(self.port, rgb565, self.port_lock)
                 self.last_art_id = art_id
         except Exception:
@@ -440,12 +464,14 @@ class NowPlayingBridge(rumps.App):
             self.last_art_id = ""
 
     def _connect(self):
-        path = find_device()
-        if not path:
+        found = find_device()
+        if not found:
             return
+        path, art_size = found
         try:
             self.port = serial.Serial(path, 115200, timeout=0.1)
             self.port_path = path
+            self.art_size = art_size
             self.reader_thread = threading.Thread(
                 target=read_commands, args=(self.port,), daemon=True
             )

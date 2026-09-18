@@ -1,8 +1,10 @@
 #include "serial.h"
 #include "ui.h"
+#include "board.h"
 #include "now_playing.h"
 
 #include <string.h>
+#include <stdio.h>
 #include "driver/usb_serial_jtag.h"
 #include "cJSON.h"
 #include "esp_log.h"
@@ -12,7 +14,9 @@
 
 static const char *TAG = "serial";
 
-#define ART_SIZE    240
+/* Artwork arrives pre-scaled to the panel. The Mac learns the size from the
+   ping response, so one build of the app drives either board. */
+#define ART_SIZE    UI_SIZE
 #define ART_BUF_SZ  (ART_SIZE * ART_SIZE * 2)   /* RGB565 */
 #define JSON_BUF_SZ 1024
 #define RX_BUF_SZ   16384
@@ -82,9 +86,12 @@ static void serial_task(void *arg)
         if (n <= 0) continue;
 
         if (hdr == 0x00) {
-            /* Ping — identify ourselves */
-            const char *ack = "NP:ACK\n";
-            usb_serial_jtag_write_bytes((const uint8_t *)ack, 7, pdMS_TO_TICKS(100));
+            /* Ping — identify ourselves and declare the artwork size we want.
+               Older Macs ignore the suffix; older devices omit it and the Mac
+               falls back to 240. */
+            char ack[16];
+            int ack_len = snprintf(ack, sizeof(ack), "NP:ACK:%d\n", ART_SIZE);
+            usb_serial_jtag_write_bytes((const uint8_t *)ack, ack_len, pdMS_TO_TICKS(100));
             continue;
 
         } else if (hdr == 0x03) {
@@ -135,7 +142,12 @@ void serial_init(void)
     ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&cfg));
 
     s_json_buf = heap_caps_malloc(JSON_BUF_SZ, MALLOC_CAP_DEFAULT);
-    s_art_buf  = heap_caps_malloc(ART_BUF_SZ, MALLOC_CAP_DEFAULT);
+#if CONFIG_SPIRAM
+    /* 412x412 RGB565 is ~332 kB — far too big for internal SRAM. */
+    s_art_buf = heap_caps_malloc(ART_BUF_SZ, MALLOC_CAP_SPIRAM);
+#else
+    s_art_buf = heap_caps_malloc(ART_BUF_SZ, MALLOC_CAP_DEFAULT);
+#endif
     assert(s_json_buf && s_art_buf);
 
     xTaskCreate(serial_task, "serial_rx", 4096, NULL, 5, NULL);

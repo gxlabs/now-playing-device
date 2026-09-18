@@ -1,7 +1,19 @@
 dependencies:
   idf:
     version: ">=5.1"
-  espressif/esp_lcd_gc9a01:
-    version: "*"
   espressif/esp_lvgl_port:
     version: "^2"
+
+  # Seeed XIAO Round Display (ESP32-C6) — GC9A01A over SPI
+  espressif/esp_lcd_gc9a01:
+    version: "*"
+    rules:
+      - if: "target == esp32c6"
+
+  # Waveshare ESP32-S3-Touch-LCD-1.46 — SPD2010 412x412 over QSPI.
+  # Its touch half is driven by boards/ws_s3_touch.c rather than
+  # esp_lcd_touch_spd2010; see the comment there.
+  espressif/esp_lcd_spd2010:
+    version: "^2"
+    rules:
+      - if: "target == esp32s3"

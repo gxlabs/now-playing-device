@@ -38,12 +38,14 @@ static void backlight_init(void)
     };
     ledc_timer_config(&timer);
 
+    /* Starts dark — main() brings it up once the first frame has been drawn,
+       so the panel's power-on garbage never reaches the eye. */
     ledc_channel_config_t ch = {
         .gpio_num = PIN_BL,
         .speed_mode = BL_LEDC_MODE,
         .channel = BL_LEDC_CHANNEL,
         .timer_sel = LEDC_TIMER_0,
-        .duty = 255,
+        .duty = 0,
         .hpoint = 0,
     };
     ledc_channel_config(&ch);

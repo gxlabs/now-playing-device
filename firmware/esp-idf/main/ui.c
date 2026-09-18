@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "serial.h"
+#include "board.h"
 #include "display.h"
 #include "esp_lvgl_port.h"
 #include "libs/qrcode/lv_qrcode.h"
@@ -11,14 +12,10 @@
 
 static const char *TAG = "ui";
 
-#define S 240   /* screen size */
 #define SETUP_URL "https://www.gxlabs.co/now-playing"
 
-LV_FONT_DECLARE(montserrat_ext_12);
-LV_FONT_DECLARE(montserrat_ext_14);
-LV_FONT_DECLARE(montserrat_ext_16);
-LV_FONT_DECLARE(montserrat_ext_18);
-LV_FONT_DECLARE(montserrat_ext_20);
+/* Layout is authored against the 240px round panel and scaled to whatever the
+   board actually has — see board.h for UI_SIZE, UI_PX() and the font roles. */
 
 /* ── Widgets ──────────────────────────────────────────────────── */
 
@@ -195,7 +192,7 @@ static lv_obj_t *make_btn(lv_obj_t *parent, const char *sym, int sz,
 {
     lv_obj_t *btn = lv_button_create(parent);
     lv_obj_set_size(btn, sz, sz);
-    lv_obj_set_ext_click_area(btn, 10);
+    lv_obj_set_ext_click_area(btn, UI_PX(10));
     lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(btn, 70, 0);
@@ -206,7 +203,7 @@ static lv_obj_t *make_btn(lv_obj_t *parent, const char *sym, int sz,
     lv_obj_t *lbl = lv_label_create(btn);
     lv_label_set_text(lbl, sym);
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
-    lv_obj_set_style_text_font(lbl, &montserrat_ext_20, 0);
+    lv_obj_set_style_text_font(lbl, FONT_LARGE, 0);
     lv_obj_center(lbl);
     return btn;
 }
@@ -216,7 +213,7 @@ static lv_obj_t *make_btn(lv_obj_t *parent, const char *sym, int sz,
 static void create_setup_screen(lv_obj_t *scr)
 {
     setup_screen = lv_obj_create(scr);
-    lv_obj_set_size(setup_screen, S, S);
+    lv_obj_set_size(setup_screen, UI_SIZE, UI_SIZE);
     lv_obj_set_pos(setup_screen, 0, 0);
     lv_obj_set_style_bg_color(setup_screen, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(setup_screen, LV_OPA_COVER, 0);
@@ -228,12 +225,12 @@ static void create_setup_screen(lv_obj_t *scr)
     lv_obj_t *lbl = lv_label_create(setup_screen);
     lv_label_set_text(lbl, "Setup");
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
-    lv_obj_set_style_text_font(lbl, &montserrat_ext_20, 0);
-    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_set_style_text_font(lbl, FONT_LARGE, 0);
+    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, UI_PX(30));
 
     /* QR code */
     qr_widget = lv_qrcode_create(setup_screen);
-    lv_qrcode_set_size(qr_widget, 100);
+    lv_qrcode_set_size(qr_widget, UI_PX(100));
     lv_qrcode_set_dark_color(qr_widget, lv_color_white());
     lv_qrcode_set_light_color(qr_widget, lv_color_black());
     lv_qrcode_update(qr_widget, SETUP_URL, strlen(SETUP_URL));
@@ -243,8 +240,8 @@ static void create_setup_screen(lv_obj_t *scr)
     lv_obj_t *url = lv_label_create(setup_screen);
     lv_label_set_text(url, "www.gxlabs.co/now-playing");
     lv_obj_set_style_text_color(url, lv_color_make(180, 180, 180), 0);
-    lv_obj_set_style_text_font(url, &montserrat_ext_12, 0);
-    lv_obj_align(url, LV_ALIGN_BOTTOM_MID, 0, -55);
+    lv_obj_set_style_text_font(url, FONT_CAPTION, 0);
+    lv_obj_align(url, LV_ALIGN_BOTTOM_MID, 0, UI_PX(-55));
 }
 
 /* ── Now-playing screen ───────────────────────────────────────── */
@@ -253,14 +250,14 @@ static void create_playing_screen(lv_obj_t *scr)
 {
     /* Full-screen album art */
     art_img = lv_image_create(scr);
-    lv_obj_set_size(art_img, S, S);
+    lv_obj_set_size(art_img, UI_SIZE, UI_SIZE);
     lv_obj_set_pos(art_img, 0, 0);
     lv_obj_add_flag(art_img, LV_OBJ_FLAG_HIDDEN);
 
     /* Soft fade strip — blurs the boundary between album art and overlay */
     fade = lv_obj_create(scr);
-    lv_obj_set_size(fade, S, 56);
-    lv_obj_align(fade, LV_ALIGN_BOTTOM_MID, 0, -146);  /* sits just above overlay */
+    lv_obj_set_size(fade, UI_SIZE, UI_PX(56));
+    lv_obj_align(fade, LV_ALIGN_BOTTOM_MID, 0, UI_PX(-146));  /* sits just above overlay */
     lv_obj_set_style_bg_color(fade, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(fade, 0, 0);
     lv_obj_set_style_bg_grad_color(fade, lv_color_black(), 0);
@@ -274,8 +271,8 @@ static void create_playing_screen(lv_obj_t *scr)
 
     /* Semi-transparent overlay */
     overlay = lv_obj_create(scr);
-    lv_obj_set_size(overlay, S, 138);
-    lv_obj_align(overlay, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_set_size(overlay, UI_SIZE, UI_PX(138));
+    lv_obj_align(overlay, LV_ALIGN_BOTTOM_MID, 0, UI_PX(-8));
     lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(overlay, 170, 0);
     lv_obj_set_style_border_width(overlay, 0, 0);
@@ -294,22 +291,22 @@ static void create_playing_screen(lv_obj_t *scr)
 
     /* Title */
     title_label = lv_label_create(overlay);
-    lv_obj_set_width(title_label, S - 4);
-    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 8);
+    lv_obj_set_width(title_label, UI_SIZE - UI_PX(4));
+    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, UI_PX(8));
     lv_label_set_text(title_label, "");
     lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title_label, &montserrat_ext_18, 0);
+    lv_obj_set_style_text_font(title_label, FONT_TITLE, 0);
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_anim(title_label, &scroll_anim_template, LV_PART_MAIN);
     lv_label_set_long_mode(title_label, LV_LABEL_LONG_SCROLL);
 
     /* Artist */
     artist_label = lv_label_create(overlay);
-    lv_obj_set_width(artist_label, 200);
-    lv_obj_align(artist_label, LV_ALIGN_TOP_MID, 0, 32);
+    lv_obj_set_width(artist_label, UI_PX(200));
+    lv_obj_align(artist_label, LV_ALIGN_TOP_MID, 0, UI_PX(32));
     lv_label_set_text(artist_label, "");
     lv_obj_set_style_text_color(artist_label, lv_color_make(200, 200, 200), 0);
-    lv_obj_set_style_text_font(artist_label, &montserrat_ext_16, 0);
+    lv_obj_set_style_text_font(artist_label, FONT_BODY, 0);
     lv_obj_set_style_text_align(artist_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_anim(artist_label, &scroll_anim_template, LV_PART_MAIN);
     lv_label_set_long_mode(artist_label, LV_LABEL_LONG_SCROLL);
@@ -318,50 +315,50 @@ static void create_playing_screen(lv_obj_t *scr)
        — fixed widths reserve space for the longest expected times so the
        bar can sit between them with consistent 1px padding. */
     elapsed_label = lv_label_create(overlay);
-    lv_obj_set_width(elapsed_label, 58);
-    lv_obj_align(elapsed_label, LV_ALIGN_TOP_LEFT, 10, 52);
+    lv_obj_set_width(elapsed_label, UI_PX(58));
+    lv_obj_align(elapsed_label, LV_ALIGN_TOP_LEFT, UI_PX(10), UI_PX(52));
     lv_label_set_text(elapsed_label, "0:00");
     lv_obj_set_style_text_color(elapsed_label, lv_color_make(180, 180, 180), 0);
-    lv_obj_set_style_text_font(elapsed_label, &montserrat_ext_14, 0);
+    lv_obj_set_style_text_font(elapsed_label, FONT_SMALL, 0);
     lv_obj_set_style_text_align(elapsed_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     progress_bar = lv_bar_create(overlay);
-    lv_obj_set_size(progress_bar, 92, 5);
-    lv_obj_align(progress_bar, LV_ALIGN_TOP_LEFT, 71, 57);
+    lv_obj_set_size(progress_bar, UI_PX(92), UI_PX(5));
+    lv_obj_align(progress_bar, LV_ALIGN_TOP_LEFT, UI_PX(71), UI_PX(57));
     lv_bar_set_range(progress_bar, 0, 1000);
     lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(progress_bar, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(progress_bar, 80, LV_PART_MAIN);
     lv_obj_set_style_bg_color(progress_bar, lv_color_white(), LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(progress_bar, LV_OPA_COVER, LV_PART_INDICATOR);
-    lv_obj_set_style_radius(progress_bar, 3, LV_PART_MAIN);
-    lv_obj_set_style_radius(progress_bar, 3, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(progress_bar, UI_PX(3), LV_PART_MAIN);
+    lv_obj_set_style_radius(progress_bar, UI_PX(3), LV_PART_INDICATOR);
 
     remaining_label = lv_label_create(overlay);
-    lv_obj_set_width(remaining_label, 64);
-    lv_obj_align(remaining_label, LV_ALIGN_TOP_LEFT, 166, 52);
+    lv_obj_set_width(remaining_label, UI_PX(64));
+    lv_obj_align(remaining_label, LV_ALIGN_TOP_LEFT, UI_PX(166), UI_PX(52));
     lv_label_set_text(remaining_label, "-0:00");
     lv_obj_set_style_text_color(remaining_label, lv_color_make(180, 180, 180), 0);
-    lv_obj_set_style_text_font(remaining_label, &montserrat_ext_14, 0);
+    lv_obj_set_style_text_font(remaining_label, FONT_SMALL, 0);
     lv_obj_set_style_text_align(remaining_label, LV_TEXT_ALIGN_LEFT, 0);
 
     /* Control buttons — large, well-spaced */
-    btn_prev = make_btn(overlay, LV_SYMBOL_PREV, 38, on_prev);
-    lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_MID, -60, -19);
+    btn_prev = make_btn(overlay, LV_SYMBOL_PREV, UI_PX(38), on_prev);
+    lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_MID, UI_PX(-60), UI_PX(-19));
 
-    btn_toggle = make_btn(overlay, LV_SYMBOL_PLAY, 60, on_toggle);
-    lv_obj_align(btn_toggle, LV_ALIGN_BOTTOM_MID, 0, -8);
+    btn_toggle = make_btn(overlay, LV_SYMBOL_PLAY, UI_PX(60), on_toggle);
+    lv_obj_align(btn_toggle, LV_ALIGN_BOTTOM_MID, 0, UI_PX(-8));
     toggle_label = lv_obj_get_child(btn_toggle, 0);
 
-    btn_next = make_btn(overlay, LV_SYMBOL_NEXT, 38, on_next);
-    lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 60, -19);
+    btn_next = make_btn(overlay, LV_SYMBOL_NEXT, UI_PX(38), on_next);
+    lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, UI_PX(60), UI_PX(-19));
 
     /* Idle label (nothing playing but connected) */
     idle_label = lv_label_create(scr);
     lv_obj_center(idle_label);
     lv_label_set_text(idle_label, "Nothing playing");
     lv_obj_set_style_text_color(idle_label, lv_color_make(120, 120, 120), 0);
-    lv_obj_set_style_text_font(idle_label, &montserrat_ext_16, 0);
+    lv_obj_set_style_text_font(idle_label, FONT_BODY, 0);
     lv_obj_add_flag(idle_label, LV_OBJ_FLAG_HIDDEN);
 }
 
