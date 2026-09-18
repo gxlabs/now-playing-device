@@ -31,7 +31,13 @@ Two boards are supported. The firmware picks the right one from the build target
 - [ESP32-S3-Touch-LCD-1.46](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-1.46) — ESP32-S3R8, 16MB flash, 8MB octal PSRAM
 - SPD2010 412x412 round IPS over QSPI, SPD2010 capacitive touch over I2C
 - Both reset lines hang off an onboard TCA9554 expander, so `boards/ws_s3_bus.c` releases them before the panel and touch drivers come up
-- The screen runs with the USB-C connector at the top. Flip `BOARD_FLIP_180` in `main/boards/ws_s3_bus.h` to mount it the other way up (panel and touch flip together)
+- Artwork is pushed at the full 412x412 — ~332 kB a frame, held in PSRAM, about 0.6s over USB on a track change
+
+Three things about this board are worth knowing before changing its drivers, all found on hardware rather than in a datasheet:
+
+- **`esp_lcd_panel_mirror()` does nothing visible on this panel.** The SPD2010 driver writes the MADCTL axis-flip bits and the picture comes out the same either way, so the 180° rotation is done with LVGL's software rotation instead. 412 is a multiple of 4, so a 180° rotation keeps every flush area on the 4-pixel boundary the SPD2010 insists on.
+- **Touch does not flip with the display.** Presses land on the right widgets exactly as the controller reports them; inverting them to match the rotated display puts every press 180° out. Hence two separate switches in `main/boards/ws_s3_bus.h`: `BOARD_FLIP_180` for the picture and `BOARD_TOUCH_FLIP_180` for presses. Setting `BOARD_FLIP_180` to `0` runs the screen Waveshare's way up, with the cable at the bottom — check whether touch then needs its own switch set to `1`, as only the shipped combination has been tried on hardware.
+- **The touch controller is driven in-tree** (`boards/ws_s3_touch.c`) rather than through Espressif's `esp_lcd_touch_spd2010`. That component reads via `esp_lcd_panel_io_i2c` with a zero-length command phase, which on ESP-IDF 5.5 becomes a zero-length `i2c_master` write before every read and is rejected with `ESP_ERR_INVALID_ARG`. The register sequence is ported from it.
 
 ## Building the menu bar app
 
@@ -105,6 +111,8 @@ idf.py build flash
 `set-target` regenerates `sdkconfig` from `sdkconfig.defaults` plus the matching `sdkconfig.defaults.<target>`, so switching boards means re-running it. Console logging goes to UART0 — USB serial belongs to the data protocol.
 
 On first boot the display shows a QR code. Once the Mac-side app connects, it switches to the now-playing UI.
+
+The 1.46" panel can come up showing static after a warm reboot; the firmware issues the panel's software reset before its init sequence to avoid that, and a power cycle clears a stuck one.
 
 ## Updating the vendored adapter
 
