@@ -28,7 +28,7 @@ Two boards are supported. The firmware picks the right one from the build target
 
 **Waveshare ESP32-S3-Touch-LCD-1.46** (`idf.py set-target esp32s3`)
 
-- [ESP32-S3-Touch-LCD-1.46](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-1.46) — ESP32-S3R8, 16MB flash, 8MB octal PSRAM
+- [ESP32-S3-Touch-LCD-1.46](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.46) — ESP32-S3R8, 16MB flash, 8MB octal PSRAM
 - SPD2010 412x412 round IPS over QSPI, SPD2010 capacitive touch over I2C
 - Both reset lines hang off an onboard TCA9554 expander, so `boards/ws_s3_bus.c` releases them before the panel and touch drivers come up
 - Artwork is pushed at the full 412x412 — ~332 kB a frame, held in PSRAM, about 0.6s over USB on a track change
