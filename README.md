@@ -2,7 +2,7 @@
 
 A macOS "now playing" display for a small round ESP32 screen. Shows album art, track info, progress, and playback controls — connected over USB.
 
-![The device showing "Money" by Pink Floyd](screenshot.jpg)
+![The device showing "Walking On The Moon" by The Police](screenshot.jpg)
 
 > **This is the source repo.** If you just want to set up the device (download the prebuilt firmware and Mac app), head to **[www.gxlabs.co/now-playing](https://www.gxlabs.co/now-playing)**.
 
