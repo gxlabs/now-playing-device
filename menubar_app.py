@@ -40,6 +40,11 @@ PYTHON = "/usr/bin/python3"
 # screen. Keeps a forgotten paused track from sitting on screen indefinitely.
 RECENT_PLAY_TIMEOUT_S = 5 * 60
 
+# How many ticks (1s apart) to keep re-fetching a new track's artwork before
+# giving up on it. Covers the window where MediaRemote has published the new
+# track's metadata but not yet its artwork.
+ART_FETCH_ATTEMPTS = 8
+
 # ── Now-playing adapter ───────────────────────────────────────────
 
 _HERE = Path(__file__).parent
@@ -123,9 +128,15 @@ def _payload(with_artwork: bool = False) -> dict:
     if not out.strip():
         return {}
     try:
-        return json.loads(out)
+        data = json.loads(out)
     except json.JSONDecodeError:
         return {}
+    # The adapter emits a bare JSON `null` when there's no now-playing item —
+    # not just when playback is stopped, but for a moment between tracks while
+    # the next one loads. `json.loads` turns that into None, and every caller
+    # here goes straight on to `.get()`, so let it through and the track-change
+    # tick dies with AttributeError exactly when artwork is due to be sent.
+    return data if isinstance(data, dict) else {}
 
 
 def get_info() -> dict:
@@ -359,6 +370,8 @@ class NowPlayingBridge(rumps.App):
         self.reader_thread = None
         self.heartbeat_thread = None
         self.last_art_id = ""
+        self._art_attempt_id = ""   # artworkId currently being retried
+        self._art_attempts = 0
         self._last_played_ts = 0.0  # monotonic time of last rate > 0 observation
         self._was_connected = False
         self._port_item = rumps.MenuItem("No device")
@@ -451,17 +464,30 @@ class NowPlayingBridge(rumps.App):
         try:
             send_state(self.port, info, self.port_lock)
 
+            # `last_art_id` means "the artwork the device is actually showing",
+            # so it only advances once a frame has gone out. A fetch that comes
+            # back empty (MediaRemote hasn't loaded the new track's art yet)
+            # then simply retries on the next tick instead of marking the track
+            # done and leaving the previous album art on screen for good.
             art_id = info.get("artworkId", "")
             if art_id and art_id != self.last_art_id:
-                jpeg = get_artwork_bytes()
-                if jpeg:
-                    rgb565 = jpeg_to_rgb565(jpeg, self.art_size)
-                    send_artwork(self.port, rgb565, self.port_lock)
-                self.last_art_id = art_id
+                if art_id != self._art_attempt_id:
+                    self._art_attempt_id = art_id
+                    self._art_attempts = 0
+                # Bounded, so a track that genuinely has no artwork stops
+                # costing an adapter subprocess every second.
+                if self._art_attempts < ART_FETCH_ATTEMPTS:
+                    self._art_attempts += 1
+                    jpeg = get_artwork_bytes()
+                    if jpeg:
+                        rgb565 = jpeg_to_rgb565(jpeg, self.art_size)
+                        send_artwork(self.port, rgb565, self.port_lock)
+                        self.last_art_id = art_id
         except Exception:
             self.port = None
             self.port_path = None
             self.last_art_id = ""
+            self._art_attempt_id = ""
 
     def _connect(self):
         found = find_device()
