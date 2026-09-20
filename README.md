@@ -94,6 +94,21 @@ Open `dist/NowPlayingDisplay.dmg`, drag `NowPlayingDisplay.app` to `/Application
 
 ## Firmware
 
+### Prebuilt
+
+Each [release](https://github.com/gxlabs/now-playing-device/releases) ships one merged image per board — bootloader, partition table and app in a single file, flashed to offset `0x0`:
+
+| Board | Asset | Flash with |
+|-------|-------|------------|
+| Waveshare ESP32-S3-Touch-LCD-1.46 | `firmware-esp32s3.bin` | `esptool.py --chip esp32s3 -p /dev/cu.usbmodem* write_flash 0x0 firmware-esp32s3.bin` |
+| Seeed XIAO ESP32-C6 + Round Display | `firmware-esp32c6.bin` | `esptool.py --chip esp32c6 -p /dev/cu.usbmodem* write_flash 0x0 firmware-esp32c6.bin` |
+
+The images are board-specific — the S3 one assumes 16MB flash and octal PSRAM, the C6 one 4MB and none — so flashing the wrong one at best fails to boot. If `esptool` can't enter download mode by itself, hold `BOOT` while plugging in.
+
+Releases before v1.2 shipped a single `firmware.bin`, which was the C6 image.
+
+### From source
+
 Requires [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/get-started/) v5.1+ (v5.5 for the ESP32-S3 board).
 
 ```bash
