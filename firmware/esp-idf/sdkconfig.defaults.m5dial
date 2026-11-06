@@ -1,0 +1,15 @@
+# M5Stack Dial (StampS3: ESP32-S3FN8, 8MB flash, no PSRAM).
+# Applied after sdkconfig.defaults. ESP-IDF also layers in
+# sdkconfig.defaults.esp32s3 (the Waveshare board's 16MB flash + octal PSRAM)
+# underneath it, so the PSRAM settings are switched off explicitly here —
+# leaving them on makes the Dial abort at boot looking for a PSRAM chip.
+# See the README for the build command.
+
+CONFIG_NP_BOARD_M5DIAL=y
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+# CONFIG_SPIRAM is not set
+
+# No PSRAM, so internal RAM must hold the 240x240 RGB565 artwork frame
+# (115 kB, contiguous) alongside LVGL. Trim LVGL's pool from the 64 kB default.
+CONFIG_LV_MEM_SIZE=49152

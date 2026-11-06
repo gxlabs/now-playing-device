@@ -8,13 +8,15 @@
               GC9A01A 240x240 over SPI, CHSC6X touch
      esp32s3  Waveshare ESP32-S3-Touch-LCD-1.46
               SPD2010 412x412 over QSPI, SPD2010 touch
+     esp32s3  M5Stack Dial (CONFIG_NP_BOARD_M5DIAL)
+              GC9A01 240x240 over SPI, FT3267 touch, rotary encoder
 
    The UI is authored against the 240px board and scaled up with UI_PX(), so
    layout stays defined in one place regardless of which panel it lands on. */
 
 #include "lvgl.h"
 
-#if CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32S3 && !CONFIG_NP_BOARD_M5DIAL
 
 #define BOARD_NAME  "Waveshare ESP32-S3-Touch-LCD-1.46"
 #define UI_SIZE     412
@@ -33,7 +35,11 @@ LV_FONT_DECLARE(montserrat_ext_34);
 
 #else
 
+#if CONFIG_NP_BOARD_M5DIAL
+#define BOARD_NAME  "M5Stack Dial"
+#else
 #define BOARD_NAME  "Seeed XIAO Round Display"
+#endif
 #define UI_SIZE     240
 
 LV_FONT_DECLARE(montserrat_ext_12);

@@ -1,1 +1,11 @@
-# No configuration needed — server pushes data over USB serial.
+menu "Now Playing"
+
+    config NP_BOARD_M5DIAL
+        bool "Build for the M5Stack Dial (ESP32-S3 StampS3, GC9A01 240x240)"
+        default n
+        help
+            The Dial shares the esp32s3 target with the Waveshare board but
+            has a different panel, no PSRAM, and a rotary encoder. Normally
+            selected by sdkconfig.defaults.m5dial rather than by hand.
+
+endmenu

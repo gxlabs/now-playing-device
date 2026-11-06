@@ -9,6 +9,8 @@ dist/
 
 # ESP-IDF
 firmware/esp-idf/build/
+firmware/esp-idf/build-*/
+firmware/esp-idf/sdkconfig.m5dial*
 firmware/esp-idf/sdkconfig
 firmware/esp-idf/sdkconfig.old
 firmware/esp-idf/managed_components/

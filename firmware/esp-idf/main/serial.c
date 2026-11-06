@@ -148,6 +148,11 @@ void serial_init(void)
 #else
     s_art_buf = heap_caps_malloc(ART_BUF_SZ, MALLOC_CAP_DEFAULT);
 #endif
+    if (!s_art_buf) {
+        ESP_LOGE(TAG, "art buffer alloc failed: free %u, largest %u",
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    }
     assert(s_json_buf && s_art_buf);
 
     xTaskCreate(serial_task, "serial_rx", 4096, NULL, 5, NULL);
