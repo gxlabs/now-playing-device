@@ -134,10 +134,9 @@ Each [release](https://github.com/gxlabs/now-playing-device/releases) ships one 
 |-------|-------|------------|
 | Waveshare ESP32-S3-Touch-LCD-1.46 | `firmware-esp32s3.bin` | `esptool.py --chip esp32s3 -p /dev/cu.usbmodem* write_flash 0x0 firmware-esp32s3.bin` |
 | Seeed XIAO ESP32-C6 + Round Display | `firmware-esp32c6.bin` | `esptool.py --chip esp32c6 -p /dev/cu.usbmodem* write_flash 0x0 firmware-esp32c6.bin` |
+| M5Stack Dial | `firmware-m5dial.bin` | `esptool.py --chip esp32s3 -p /dev/cu.usbmodem* write_flash 0x0 firmware-m5dial.bin` |
 
-There is no prebuilt image for the M5Stack Dial yet; build it from source (below).
-
-The images are board-specific — the S3 one assumes 16MB flash and octal PSRAM, the C6 one 4MB and none — so flashing the wrong one at best fails to boot. If `esptool` can't enter download mode by itself, hold `BOOT` while plugging in.
+The images are board-specific — the Waveshare one assumes 16MB flash and octal PSRAM, the Dial 8MB and no PSRAM, the C6 4MB and none — so flashing the wrong one at best fails to boot. The Waveshare board and the Dial are both ESP32-S3s, so `esptool` will happily flash either image to either board; check which one you have. If `esptool` can't enter download mode by itself, hold `BOOT` while plugging in.
 
 Releases before v1.2 shipped a single `firmware.bin`, which was the C6 image.
 
@@ -193,6 +192,8 @@ The Mac and ESP32 communicate over USB serial with a simple binary protocol:
 ## Credits
 
 This project would not be possible without [ungive/mediaremote-adapter](https://github.com/ungive/mediaremote-adapter), which provides the Apple-signed bridge into the private MediaRemote framework on macOS 15.4+. Huge thanks to [@ungive](https://github.com/ungive) for building and maintaining it.
+
+M5Stack Dial support — the GC9A01 display and FT3267 touch drivers, the rotary encoder, and the no-PSRAM memory tuning — was contributed by [@BluDotz](https://github.com/BluDotz).
 
 ## Gratuity
 
